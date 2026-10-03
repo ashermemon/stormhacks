@@ -1,10 +1,8 @@
 import * as THREE from 'three';
 
-const webSockets = new WebSocket('wss://konstantin-macbook-6.miku-harmonic.ts.net/');
 
 
-
-
+ 
 const scene = new THREE.Scene();
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -33,20 +31,61 @@ document.getElementById('host-btn').addEventListener('click', () => {
 
 
 });
-
-document.getElementById('join-btn').addEventListener('click', () => {
-  // TODO: join a game
-const joinRequest = {
-  type: 'request',
-  action: 'join',
-  data: {
-    // Add any necessary data for joining a game here
+document.getElementById('join-btn').addEventListener('click', async () => {
+  try {
+    const result = await joinGame();
+    console.log('Joined game:', result);
+  } catch (error) {
+    console.error('Failed to join:', error);
   }
-}
-webSockets.send(JSON.stringify(joinRequest));
-
-
 });
+
+function joinGame() {
+
+  return new Promise((resolve, reject) => {
+       let webSocket
+    try {
+  webSocket= new WebSocket(
+      'wss://konstantin-macbook-6.miku-harmonic.ts.net/'
+    );
+    
+  } catch (error) {
+    alert('Failed to create WebSocket connection. Please check your network and try again.');
+    reject(new Error('Failed to create WebSocket connection'));
+  }
+
+    webSocket.addEventListener('open', () => {
+      const joinRequest = {
+        type: 'request',
+        action: 'join',
+        data: {
+          // Add any necessary data here
+        }
+      };
+
+      webSocket.send(JSON.stringify(joinRequest));
+    });
+
+    webSocket.addEventListener('message', (event) => {
+   
+    const message = JSON.parse(event.data);
+
+      console.log('Received message:', message);
+
+
+    });
+
+    webSocket.addEventListener('error', () => {
+      reject(new Error('WebSocket connection failed'));
+    });
+
+    webSocket.addEventListener('close', () => {
+      // Only reject if the Promise hasn't already resolved.
+      // You can add additional handling here if needed.
+      alert("Server closed the connection. Please try again later.");
+    });
+  });
+}
 
 renderer.setAnimationLoop(() => {
   cube.rotation.x += 0.01;
