@@ -24,10 +24,17 @@ scene.add(cube);
 
 document.getElementById('host-btn').addEventListener('click', () => {
   // TODO: host a game
+
+
+
 });
 
 document.getElementById('join-btn').addEventListener('click', () => {
   // TODO: join a game
+
+
+
+  
 });
 
 renderer.setAnimationLoop(() => {
