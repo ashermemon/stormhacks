@@ -7,6 +7,7 @@ const WATER_HEIGHT = 18;
 const WATER_X = 0;
 const WATER_Y = -9;
 const WATER_Z = 0;
+export const WATER_BOTTOM = WATER_Y - WATER_HEIGHT / 2;
 const GRAVITY = 25;
 const JUMP_VELOCITY = 9;
 const UP_SPEED = 2;

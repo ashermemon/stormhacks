@@ -3,6 +3,8 @@ import { connect } from "./net.js";
 import { keys } from "./input.js";
 import { createAquaticArea } from "./water.js";
 import { createEnvironment } from "./environment.js";
+import { Character, OTTER_COLORS } from "./character.js";
+import { getUsername } from "./nametags.js";
 
 const ARENA_HALF = 20;
 const AVATAR = { w: 1, h: 2, d: 0.6 };
@@ -13,25 +15,11 @@ const CAMERA_HEIGHT = 4;
 const ORBIT_SPEED = 2;
 const REMOTE_SMOOTHING = 15;
 
+// Hash the id so each player gets a random-looking color that matches on every client.
 function colorFor(id) {
-  return new THREE.Color().setHSL((parseInt(id, 16) % 360) / 360, 0.7, 0.55);
-}
-
-function createAvatar(color) {
-  const group = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(AVATAR.w, AVATAR.h, AVATAR.d),
-    new THREE.MeshStandardMaterial({ color }),
-  );
-  body.position.y = AVATAR.h / 2;
-  // Lighter strip on the front (+z) so facing direction is visible.
-  const face = new THREE.Mesh(
-    new THREE.BoxGeometry(AVATAR.w * 0.6, AVATAR.h * 0.2, 0.05),
-    new THREE.MeshStandardMaterial({ color: 0xffffff }),
-  );
-  face.position.set(0, AVATAR.h * 0.8, AVATAR.d / 2 + 0.025);
-  group.add(body, face);
-  return group;
+  let h = 0;
+  for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) | 0;
+  return OTTER_COLORS[Math.abs(h) % OTTER_COLORS.length];
 }
 
 function lerpAngle(a, b, t) {
@@ -63,18 +51,16 @@ export async function startGame() {
 
   const stepVerticalPhysics = createAquaticArea(scene).stepPhysics;
 
-
   // Remote players.
-  const remotes = new Map(); // id -> { mesh, target: {x,y,z,ry} }
+  const remotes = new Map(); // id -> { character, target: {x,y,z,ry} }
 
   function setRemote(id, state) {
     let remote = remotes.get(id);
     if (!remote) {
-      const mesh = createAvatar(colorFor(id));
-      mesh.position.set(state.x, state.y, state.z);
-      mesh.rotation.y = state.ry;
-      scene.add(mesh);
-      remote = { mesh, target: state };
+      const character = new Character(scene, colorFor(id));
+      character.root.position.set(state.x, state.y, state.z);
+      character.root.rotation.y = state.ry;
+      remote = { character, target: state };
       remotes.set(id, remote);
     }
     remote.target = state;
@@ -85,7 +71,7 @@ export async function startGame() {
     onLeave(id) {
       const remote = remotes.get(id);
       if (remote) {
-        scene.remove(remote.mesh);
+        remote.character.dispose();
         remotes.delete(id);
       }
     },
@@ -97,10 +83,9 @@ export async function startGame() {
   for (const [id, state] of Object.entries(net.players)) setRemote(id, state);
 
   // Local player.
-  const me = createAvatar(colorFor(net.id));
+  const me = new Character(scene, colorFor(net.id), getUsername());
   const spawn = () => (Math.random() * 2 - 1) * (ARENA_HALF - 2);
   const player = { x: spawn(), y: 0, z: spawn(), vy: 0, ry: 0 };
-  scene.add(me);
 
   let cameraYaw = 0;
   let dragging = false;
@@ -160,8 +145,9 @@ export async function startGame() {
       isOverArenaFloor(),
     );
 
-    me.position.set(player.x, player.y, player.z);
-    me.rotation.y = player.ry;
+    me.root.position.set(player.x, player.y, player.z);
+    me.root.rotation.y = player.ry;
+    me.update(dt);
 
     // Third-person camera behind the player, looking at their head.
     camera.position.set(
@@ -170,7 +156,7 @@ export async function startGame() {
       player.z + Math.cos(cameraYaw) * CAMERA_DISTANCE,
     );
     camera.lookAt(player.x, player.y + AVATAR.h, player.z);
- 
+
     // Network.
     sendTimer += dt;
     if (
@@ -191,11 +177,13 @@ export async function startGame() {
 
     // Smooth remote players toward their latest state.
     const t = 1 - Math.exp(-REMOTE_SMOOTHING * dt);
-    for (const { mesh, target } of remotes.values()) {
-      mesh.position.x += (target.x - mesh.position.x) * t;
-      mesh.position.y += (target.y - mesh.position.y) * t;
-      mesh.position.z += (target.z - mesh.position.z) * t;
-      mesh.rotation.y = lerpAngle(mesh.rotation.y, target.ry, t);
+    for (const { character, target } of remotes.values()) {
+      const { position, rotation } = character.root;
+      position.x += (target.x - position.x) * t;
+      position.y += (target.y - position.y) * t;
+      position.z += (target.z - position.z) * t;
+      rotation.y = lerpAngle(rotation.y, target.ry, t);
+      character.update(dt);
     }
 
     renderer.render(scene, camera);

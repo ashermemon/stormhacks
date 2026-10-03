@@ -4,7 +4,8 @@ import * as SkeletonUtils from "three/examples/jsm/utils/SkeletonUtils.js";
 import otterUrl from "../assets/models/character/Otter.glb?url";
 import { createNametag, disposeNametag } from "./nametags.js";
 
-const NAMETAG_GAP = 0.3;
+const NAMETAG_GAP = 0.4;
+const MODEL_SCALE = 1.8;
 
 const TEXTURE_URLS = Object.fromEntries(
   Object.entries(
@@ -86,10 +87,13 @@ export class Character {
       }
     });
 
+    otter.scale.setScalar(MODEL_SCALE);
+    this.nametagHeight =
+      new THREE.Box3().setFromObject(otter).max.y + NAMETAG_GAP;
+
     this.model = otter;
     this.root.add(otter);
 
-    this.nametagHeight = new THREE.Box3().setFromObject(otter).max.y + NAMETAG_GAP;
     if (this.nametag) this.nametag.position.y = this.nametagHeight;
 
     if (gltf.animations.length > 0) {

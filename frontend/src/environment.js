@@ -1,5 +1,8 @@
 import * as THREE from "three";
-import { WATER_WIDTH } from "./water.js";
+import { WATER_BOTTOM, WATER_WIDTH } from "./water.js";
+
+const GROUND_TOP = -0.08;
+const GROUND_BOTTOM = WATER_BOTTOM - 2;
 
 function addTree(scene, x, z, scale = 1) {
   const tree = new THREE.Group();
@@ -45,6 +48,29 @@ function addMountain(scene, x, z, width, height, color) {
   scene.add(mountain);
 }
 
+// Solid blocks of earth on either side of the water channel, plus a bed under it.
+function addGround(scene, arenaHalf) {
+  const grass = new THREE.MeshStandardMaterial({ color: 0x4e9a62, roughness: 1 });
+  const dirt = new THREE.MeshStandardMaterial({ color: 0x6b4f36, roughness: 1 });
+  // BoxGeometry face order: +x, -x, +y, -y, +z, -z.
+  const grassTop = [dirt, dirt, grass, dirt, dirt, dirt];
+
+  const addBlock = (minX, maxX, topY, materials) => {
+    const height = topY - GROUND_BOTTOM;
+    const block = new THREE.Mesh(
+      new THREE.BoxGeometry(maxX - minX, height, arenaHalf * 2),
+      materials,
+    );
+    block.position.set((minX + maxX) / 2, topY - height / 2, 0);
+    scene.add(block);
+  };
+
+  const channelHalf = WATER_WIDTH / 2;
+  addBlock(-arenaHalf, -channelHalf, GROUND_TOP, grassTop);
+  addBlock(channelHalf, arenaHalf, GROUND_TOP, grassTop);
+  addBlock(-channelHalf, channelHalf, WATER_BOTTOM, dirt);
+}
+
 export function createEnvironment(scene, arenaHalf) {
   scene.background = new THREE.Color(0x9bd8ed);
   scene.fog = new THREE.Fog(0x9bd8ed, 45, 115);
@@ -54,13 +80,7 @@ export function createEnvironment(scene, arenaHalf) {
   sun.position.set(-25, 35, 12);
   scene.add(sun);
 
-  const land = new THREE.Mesh(
-    new THREE.PlaneGeometry(arenaHalf * 2, arenaHalf * 2),
-    new THREE.MeshStandardMaterial({ color: 0x4e9a62, roughness: 1 }),
-  );
-  land.rotation.x = -Math.PI / 2;
-  land.position.y = -0.08;
-  scene.add(land);
+  addGround(scene, arenaHalf);
 
   for (const [x, z, scale] of [
     [-17, -15, 1.2],

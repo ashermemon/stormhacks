@@ -2,12 +2,12 @@ import * as THREE from "three";
 import pixeltaUrl from "../assets/fonts/Pixelta.ttf?url";
 
 const FONT_FAMILY = "Pixelta";
-const FONT_SIZE = 7 / 0.659;
+// Pixelta has fine stepped outlines, so draw it large rather than at a tiny pixel size.
+const FONT_SIZE = 64;
 const ASCENT = 0.85;
 const DESCENT = 0.213;
-const PADDING_X = 2;
-const PADDING_Y = 1;
-const ALPHA_THRESHOLD = 110;
+const PADDING_X = 12;
+const PADDING_Y = 4;
 const BACKGROUND = "rgba(0, 0, 0, 0.35)";
 const WORLD_HEIGHT = 0.3;
 
@@ -27,48 +27,26 @@ export function getUsername() {
   return lastUsername || "Player";
 }
 
-function drawPixelText(text) {
+function paintNametag(sprite, text) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   const font = `${FONT_SIZE}px ${FONT_FAMILY}, monospace`;
 
   ctx.font = font;
-  canvas.width = Math.ceil(ctx.measureText(text).width) + 1;
-  canvas.height = Math.ceil(FONT_SIZE * (ASCENT + DESCENT));
+  canvas.width = Math.ceil(ctx.measureText(text).width) + PADDING_X * 2;
+  canvas.height = Math.ceil(FONT_SIZE * (ASCENT + DESCENT)) + PADDING_Y * 2;
+
+  ctx.fillStyle = BACKGROUND;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.font = font;
   ctx.fillStyle = "#ffffff";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText(text, 0, Math.round(FONT_SIZE * ASCENT));
-
-  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const px = image.data;
-  for (let i = 0; i < px.length; i += 4) {
-    const on = px[i + 3] >= ALPHA_THRESHOLD;
-    px[i] = px[i + 1] = px[i + 2] = 255;
-    px[i + 3] = on ? 255 : 0;
-  }
-  ctx.putImageData(image, 0, 0);
-  return canvas;
-}
-
-function paintNametag(sprite, text) {
-  const textCanvas = drawPixelText(text);
-
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  canvas.width = textCanvas.width + PADDING_X * 2;
-  canvas.height = textCanvas.height + PADDING_Y * 2;
-
-  ctx.fillStyle = BACKGROUND;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(textCanvas, PADDING_X, PADDING_Y);
+  ctx.fillText(text, PADDING_X, PADDING_Y + Math.round(FONT_SIZE * ASCENT));
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  texture.magFilter = THREE.NearestFilter;
-  texture.minFilter = THREE.NearestFilter;
-  texture.generateMipmaps = false;
+  texture.anisotropy = 4;
 
   sprite.material.map?.dispose();
   sprite.material.map = texture;
