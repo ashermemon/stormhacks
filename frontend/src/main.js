@@ -1,12 +1,13 @@
-import { startGame } from './game.js';
+import { startGame } from "./game.js";
 
-const menu = document.getElementById('menu');
-const playBtn = document.getElementById('play-btn');
-const status = document.getElementById('status');
+const menu = document.getElementById("menu");
+const playBtn = document.getElementById("play-btn");
+const status = document.getElementById("status");
+const usernameInput = document.getElementById("username");
 
-playBtn.addEventListener('click', async () => {
+playBtn.addEventListener("click", async () => {
   playBtn.disabled = true;
-  status.textContent = 'Connecting...';
+  status.textContent = "Connecting...";
   try {
     await startGame();
     menu.remove();

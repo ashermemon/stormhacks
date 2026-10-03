@@ -2,6 +2,9 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/examples/jsm/utils/SkeletonUtils.js";
 import otterUrl from "../assets/models/character/Otter.glb?url";
+import { createNametag, disposeNametag } from "./nametags.js";
+
+const NAMETAG_GAP = 0.3;
 
 const TEXTURE_URLS = Object.fromEntries(
   Object.entries(
@@ -36,7 +39,7 @@ function loadTexture(color) {
 }
 
 export class Character {
-  constructor(scene, color = "Yellow") {
+  constructor(scene, color = "Yellow", name = null) {
     if (!TEXTURE_URLS[color]) {
       color = "Yellow";
     }
@@ -48,8 +51,24 @@ export class Character {
     this.root = new THREE.Group();
     this.scene.add(this.root);
     this.model = null;
+    this.nametag = null;
+    this.nametagHeight = 2;
 
+    if (name) this.setName(name);
     this.ready = this.load();
+  }
+
+  setName(name) {
+    if (this.nametag) {
+      this.root.remove(this.nametag);
+      disposeNametag(this.nametag);
+      this.nametag = null;
+    }
+    this.name = name;
+    if (!name) return;
+    this.nametag = createNametag(name);
+    this.nametag.position.y = this.nametagHeight;
+    this.root.add(this.nametag);
   }
 
   async load() {
@@ -69,6 +88,9 @@ export class Character {
 
     this.model = otter;
     this.root.add(otter);
+
+    this.nametagHeight = new THREE.Box3().setFromObject(otter).max.y + NAMETAG_GAP;
+    if (this.nametag) this.nametag.position.y = this.nametagHeight;
 
     if (gltf.animations.length > 0) {
       this.mixer = new THREE.AnimationMixer(otter);
@@ -94,6 +116,7 @@ export class Character {
   }
 
   dispose() {
+    this.setName(null);
     this.scene.remove(this.root);
     this.mixer?.stopAllAction();
   }
