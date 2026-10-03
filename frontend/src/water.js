@@ -14,6 +14,19 @@ const UP_SPEED = 2;
 const DOWN_SPEED = 2;
 const WATER_JUMP_VELOCITY = 8;
 
+
+const underwaterOverlay = document.createElement('div');
+
+underwaterOverlay.style.position = 'fixed';
+underwaterOverlay.style.inset = '0';
+underwaterOverlay.style.background = 'rgba(0, 100, 255, 0.35)';
+underwaterOverlay.style.pointerEvents = 'none';
+underwaterOverlay.style.zIndex = '9999';
+underwaterOverlay.style.opacity = '0';
+underwaterOverlay.style.transition = 'opacity 0.3s ease';
+
+document.body.appendChild(underwaterOverlay);
+
 export function createAquaticArea(scene) {
   const water = new THREE.Mesh(
     new THREE.BoxGeometry(WATER_WIDTH, WATER_HEIGHT, WATER_DEPTH),
@@ -72,7 +85,12 @@ export function createAquaticArea(scene) {
       player.y = 0;
       player.vy = 0;
     }
+    
+	const underwater = onWater && player.y < 0;
+
+	underwaterOverlay.style.opacity = underwater ? '1' : '0';
   }
+  
 
   return {
     stepPhysics: stepVerticalMotion,
