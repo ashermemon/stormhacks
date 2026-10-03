@@ -22,6 +22,18 @@ function colorFor(id) {
 }
 
 const raycaster = new THREE.Raycaster();
+const underwaterOverlay = document.createElement('div');
+
+underwaterOverlay.style.position = 'fixed';
+underwaterOverlay.style.inset = '0';
+underwaterOverlay.style.background = 'rgba(0, 100, 255, 0.35)';
+underwaterOverlay.style.pointerEvents = 'none';
+underwaterOverlay.style.zIndex = '9999';
+underwaterOverlay.style.opacity = '0';
+underwaterOverlay.style.transition = 'opacity 0.3s ease';
+
+document.body.appendChild(underwaterOverlay);
+
 
 function tryPickupUnderwaterBox() {
   raycaster.setFromCamera(
@@ -140,9 +152,9 @@ scene.add(water);
 	);
 
 	underwaterBox.position.set(
-	  -ARENA_HALF / 2,
+	  -ARENA_HALF / 12,
 	  -1,
-	  ARENA_HALF / 2
+	  ARENA_HALF / 12
 	);
 
 scene.add(water);
@@ -269,6 +281,10 @@ scene.add(waterFloor);
 	} else {
 	  player.vy -= GRAVITY * dt;
 	}
+	const underwater = onWater && player.y < 0;
+
+	underwaterOverlay.style.opacity = underwater ? '1' : '0';
+
 
     player.y += player.vy * dt;
     if (!onWater && player.y <= 0) {
@@ -286,7 +302,7 @@ scene.add(waterFloor);
       player.z + Math.cos(cameraYaw) * CAMERA_DISTANCE
     );
     camera.lookAt(player.x, player.y + AVATAR.h, player.z);
-
+ 
     // Network.
     sendTimer += dt;
     if(previousPlayerPosition.x !== player.x || previousPlayerPosition.y !== player.y || previousPlayerPosition.z !== player.z || previousPlayerPosition.ry !== player.ry) {
