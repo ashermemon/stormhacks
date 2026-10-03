@@ -22,6 +22,14 @@ const cube = new THREE.Mesh(
 );
 scene.add(cube);
 
+document.getElementById('host-btn').addEventListener('click', () => {
+  // TODO: host a game
+});
+
+document.getElementById('join-btn').addEventListener('click', () => {
+  // TODO: join a game
+});
+
 renderer.setAnimationLoop(() => {
   cube.rotation.x += 0.01;
   cube.rotation.y += 0.01;
