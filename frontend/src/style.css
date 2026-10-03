@@ -20,7 +20,16 @@ canvas {
   font-family: system-ui, sans-serif;
   color: #fff;
 }
-
+#username{
+  width: 240px;
+  padding: 14px 0;
+  font-size: 20px;
+  font-family: inherit;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  color: #fff;
+}
 #menu h1 {
   margin: 0 0 24px;
   font-size: 56px;
