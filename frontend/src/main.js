@@ -36,8 +36,14 @@ document.getElementById('host-btn').addEventListener('click', () => {
 
 document.getElementById('join-btn').addEventListener('click', () => {
   // TODO: join a game
-
-
+const joinRequest = {
+  type: 'request',
+  action: 'join',
+  data: {
+    // Add any necessary data for joining a game here
+  }
+}
+webSockets.send(JSON.stringify(joinRequest));
 
 
 });
