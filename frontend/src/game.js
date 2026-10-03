@@ -225,7 +225,6 @@ scene.add(waterFloor);
   const clock = new THREE.Clock();
   const limit = ARENA_HALF - AVATAR.w / 2;
   let previousPlayerPosition = { x:player.x, y:player.y, z:player.z, ry: player.ry};
-
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.1);
 
@@ -284,19 +283,17 @@ scene.add(waterFloor);
 
     // Network.
     sendTimer += dt;
-    if (previousPlayerPosition.x !== player.x || previousPlayerPosition.y !== player.y || previousPlayerPosition.z !== player.z ||previousPlayerPosition.ry !== player.ry)
-    {
-		previousPlayerPosition.x = player.x;
-		previousPlayerPosition.y = player.y;
-		previousPlayerPosition.z = player.z;
-		previousPlayerPosition.ry = player.ry;
-    
+    if(previousPlayerPosition.x !== player.x || previousPlayerPosition.y !== player.y || previousPlayerPosition.z !== player.z || previousPlayerPosition.ry !== player.ry) {
+      previousPlayerPosition.x = player.x;
+      previousPlayerPosition.y = player.y;
+      previousPlayerPosition.z = player.z;
+      previousPlayerPosition.ry = player.ry;
+    }
     if (sendTimer >= SEND_INTERVAL) {
       sendTimer = 0;
       net.sendState({ x: player.x, y: player.y, z: player.z, ry: player.ry });
     }
-    
-}
+   
     // Smooth remote players toward their latest state.
     const t = 1 - Math.exp(-REMOTE_SMOOTHING * dt);
     for (const { mesh, target } of remotes.values()) {

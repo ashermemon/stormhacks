@@ -1,5 +1,5 @@
 const SERVER_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
-
+console.log(SERVER_URL);
 /**
  * Connects to the relay server. Resolves once the welcome message arrives.
  * handlers: { onState(id, state), onLeave(id), onClose() }
@@ -27,6 +27,7 @@ export function connect(handlers) {
 
     ws.addEventListener('message', (event) => {
       let msg;
+      console.log('Received message:', event.data);
       try {
         msg = JSON.parse(event.data);
       } catch {
