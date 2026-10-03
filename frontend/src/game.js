@@ -23,6 +23,39 @@ function colorFor(id) {
   return new THREE.Color().setHSL((parseInt(id, 16) % 360) / 360, 0.7, 0.55);
 }
 
+const raycaster = new THREE.Raycaster();
+const underwaterOverlay = document.createElement('div');
+
+underwaterOverlay.style.position = 'fixed';
+underwaterOverlay.style.inset = '0';
+underwaterOverlay.style.background = 'rgba(0, 100, 255, 0.35)';
+underwaterOverlay.style.pointerEvents = 'none';
+underwaterOverlay.style.zIndex = '9999';
+underwaterOverlay.style.opacity = '0';
+underwaterOverlay.style.transition = 'opacity 0.3s ease';
+
+document.body.appendChild(underwaterOverlay);
+
+
+function tryPickupUnderwaterBox() {
+  raycaster.setFromCamera(
+	new THREE.Vector2(0, 0),
+	camera
+  );
+
+  const hits = raycaster.intersectObject(underwaterBox);
+
+  if (hits.length === 0) return;
+
+  const distance = camera.position.distanceTo(underwaterBox.position);
+
+  if (distance > 3) return;
+
+  // Pick up
+  underwaterBox.visible = false;
+
+  player.hasUnderwaterBox = true;
+}
 function createAvatar(color) {
   const group = new THREE.Group();
   const body = new THREE.Mesh(
@@ -68,6 +101,98 @@ export async function startGame() {
   });
 
   const { water, waterSurface } = createWater(scene);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x556655, 1.2));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+  sun.position.set(10, 20, 5);
+  scene.add(sun);
+
+  // Bounded flat world.
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(ARENA_HALF * 2, ARENA_HALF * 2),
+    new THREE.MeshStandardMaterial({ color: 0x6aa84f })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  scene.add(floor);
+  scene.add(new THREE.GridHelper(ARENA_HALF * 2, ARENA_HALF * 2, 0x2f5f2f, 0x4f8f3f));
+
+  const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x8888aa });
+  for (const [x, z, w, d] of [
+    [0, -ARENA_HALF, ARENA_HALF * 2, 0.4],
+    [0, ARENA_HALF, ARENA_HALF * 2, 0.4],
+    [-ARENA_HALF, 0, 0.4, ARENA_HALF * 2],
+    [ARENA_HALF, 0, 0.4, ARENA_HALF * 2],
+  ]) {
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(w, 1, d), wallMaterial);
+    wall.position.set(x, 0.5, z);
+  }
+
+	const water = new THREE.Mesh(
+  new THREE.BoxGeometry(
+    ARENA_HALF * 2,
+    2,
+    ARENA_HALF
+  ),
+  new THREE.MeshStandardMaterial({
+    color: 0x2d9cdb,
+    transparent: true,
+    opacity: 0.4,
+    roughness: 0.2,
+    metalness: 0.1,
+    depthWrite: false
+  })
+);
+
+// South of the arena, outside the walls
+water.position.set(
+  0,
+  -20,
+  ARENA_HALF + ARENA_HALF / 2
+);
+
+scene.add(water);
+
+	const underwaterBox = new THREE.Mesh(
+	new THREE.BoxGeometry(1, 1, 1),
+	new THREE.MeshStandardMaterial({
+		color: 0x000000
+	  })
+	);
+
+	underwaterBox.position.set(
+	  -ARENA_HALF / 48,
+	  -1,
+	  ARENA_HALF / 48
+	);
+
+scene.add(water);
+
+const waterFloor = new THREE.Mesh(
+  new THREE.BoxGeometry(
+    ARENA_HALF * 2,
+    0.2,
+    ARENA_HALF
+  ),
+  new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 0.8
+  })
+);
+
+waterFloor.position.set(
+  0,
+  -2.1,
+  ARENA_HALF + ARENA_HALF / 2
+);
+
+scene.add(waterFloor);
+
+
+
+	
+
+
+	//~ scene.add(water);
+
 
   // Remote players.
   const remotes = new Map(); // id -> { mesh, target: {x,y,z,ry} }
@@ -206,7 +331,7 @@ export async function startGame() {
       player.z + Math.cos(cameraYaw) * CAMERA_DISTANCE,
     );
     camera.lookAt(player.x, player.y + AVATAR.h, player.z);
-
+ 
     // Network.
     sendTimer += dt;
     if (

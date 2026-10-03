@@ -17,7 +17,7 @@ export const keys = {
   jump: () => down.has('Space'),
   /** Camera orbit axis: +1 = E, -1 = Q. */
   
-  upward: () => down.has('KeyZ'),
-  downward: () => down.has('KeyC'),
+  upward: () => down.has('Space'),
+  downward: () => down.has('ShiftLeft') || down.has('ShiftRight'),
   orbit: () => (down.has('KeyE') ? 1 : 0) - (down.has('KeyQ') ? 1 : 0),
 };
