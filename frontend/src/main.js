@@ -1,4 +1,10 @@
 import * as THREE from 'three';
+import QrScanner from 'qr-scanner';
+
+const webSockets = new WebSocket('wss://konstantin-macbook-6.miku-harmonic.ts.net/');
+
+
+
 
 const scene = new THREE.Scene();
 
@@ -34,7 +40,7 @@ document.getElementById('join-btn').addEventListener('click', () => {
 
 
 
-  
+
 });
 
 renderer.setAnimationLoop(() => {
