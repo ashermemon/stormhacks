@@ -1,4 +1,4 @@
-const SERVER_URL = 'wss://konstantin-macbook-6.miku-harmonic.ts.net/';
+const SERVER_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 
 /**
  * Connects to the relay server. Resolves once the welcome message arrives.
