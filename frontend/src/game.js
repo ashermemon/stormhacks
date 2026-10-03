@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { connect } from "./net.js";
 import { keys } from "./input.js";
 import { isOnWater } from "./functions.js";
+import { createWater } from "./water.js";
+import { createEnvironment } from "./environment.js";
 
 const ARENA_HALF = 20;
 const AVATAR = { w: 1, h: 2, d: 0.6 };
@@ -43,46 +45,9 @@ function lerpAngle(a, b, t) {
   return a + diff * t;
 }
 
-function addTree(scene, x, z, scale = 1) {
-  const tree = new THREE.Group();
-  const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.22 * scale, 0.32 * scale, 2.2 * scale, 7),
-    new THREE.MeshStandardMaterial({ color: 0x6b4226, roughness: 1 }),
-  );
-  trunk.position.y = 1.1 * scale;
-  const crown = new THREE.Mesh(
-    new THREE.ConeGeometry(1.35 * scale, 3 * scale, 8),
-    new THREE.MeshStandardMaterial({ color: 0x237a45, roughness: 0.95, flatShading: true }),
-  );
-  crown.position.y = 3.2 * scale;
-  tree.add(trunk, crown);
-  tree.position.set(x, 0, z);
-  scene.add(tree);
-}
-
-function addRock(scene, x, z, scale = 1) {
-  const rock = new THREE.Mesh(
-    new THREE.DodecahedronGeometry(scale, 0),
-    new THREE.MeshStandardMaterial({ color: 0x687477, roughness: 1, flatShading: true }),
-  );
-  rock.scale.y = 0.6;
-  rock.position.set(x, scale * 0.45, z);
-  scene.add(rock);
-}
-
-function addMountain(scene, x, z, width, height, color) {
-  const mountain = new THREE.Mesh(
-    new THREE.ConeGeometry(width, height, 6),
-    new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true }),
-  );
-  mountain.position.set(x, height / 2 - 0.5, z);
-  scene.add(mountain);
-}
-
 export async function startGame() {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x9bd8ed);
-  scene.fog = new THREE.Fog(0x9bd8ed, 45, 115);
+  createEnvironment(scene, ARENA_HALF);
 
   const camera = new THREE.PerspectiveCamera(
     70,
@@ -102,83 +67,7 @@ export async function startGame() {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  scene.add(new THREE.HemisphereLight(0xfff4d6, 0x315447, 1.5));
-  const sun = new THREE.DirectionalLight(0xffe2a6, 2);
-  sun.position.set(-25, 35, 12);
-  scene.add(sun);
-
-  // Bounded flat world.
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(ARENA_HALF * 2, ARENA_HALF),
-    new THREE.MeshStandardMaterial({ color: 0x4e9a62, roughness: 1 }),
-  );
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.z = -ARENA_HALF / 2;
-  scene.add(floor);
-
-  const meadow = new THREE.Mesh(
-    new THREE.CircleGeometry(72, 48),
-    new THREE.MeshStandardMaterial({ color: 0x397b50, roughness: 1 }),
-  );
-  meadow.rotation.x = -Math.PI / 2;
-  meadow.position.y = -0.08;
-  scene.add(meadow);
-
-  for (const [x, z, scale] of [
-    [-17, -15, 1.2], [-12, 16, 0.9], [15, -14, 1.1], [16, 14, 1.3],
-    [-18, 8, 0.8], [18, -4, 0.9], [-7, -18, 0.75], [8, 18, 0.8],
-  ]) addTree(scene, x, z, scale);
-  for (const [x, z, scale] of [[-13, -5, 1.1], [12, -10, 0.8], [-16, 13, 0.7], [14, 17, 0.9]]) {
-    addRock(scene, x, z, scale);
-  }
-  addMountain(scene, -46, -38, 18, 26, 0x476b68);
-  addMountain(scene, -18, -48, 22, 32, 0x587875);
-  addMountain(scene, 18, -50, 20, 28, 0x3f6465);
-  addMountain(scene, 48, -35, 16, 23, 0x52716d);
-
-  const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x8888aa });
-  for (const [x, z, w, d] of [
-    [0, -ARENA_HALF, ARENA_HALF * 2, 0.4],
-    [0, ARENA_HALF, ARENA_HALF * 2, 0.4],
-    [-ARENA_HALF, 0, 0.4, ARENA_HALF * 2],
-    [ARENA_HALF, 0, 0.4, ARENA_HALF * 2],
-  ]) {
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(w, 1, d), wallMaterial);
-    wall.position.set(x, 0.5, z);
-    scene.add(wall);
-  }
-
-  const water = new THREE.Mesh(
-    new THREE.BoxGeometry(ARENA_HALF * 2, 6, ARENA_HALF),
-    new THREE.MeshStandardMaterial({
-      color: 0x2d9cdb,
-      transparent: true,
-      opacity: 0.4,
-      roughness: 0.2,
-      metalness: 0.1,
-      depthWrite: false,
-    }),
-  );
-
-  // A shallow pool sits at the far side of the meadow.
-  water.position.set(0, -3, 10);
-
-  scene.add(water);
-
-  const waterFloor = new THREE.Mesh(
-    new THREE.BoxGeometry(ARENA_HALF * 2, 0.2, ARENA_HALF),
-    new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      roughness: 0.8,
-    }),
-  );
-
-  waterFloor.position.set(0, -6.1, 10);
-
-  scene.add(waterFloor);
-  const waterSurface = water.position.y + water.geometry.parameters.height / 2;
-  const waterFloorTop =
-    waterFloor.position.y + waterFloor.geometry.parameters.height / 2;
+  const { water, waterSurface } = createWater(scene);
 
   // Remote players.
   const remotes = new Map(); // id -> { mesh, target: {x,y,z,ry} }
@@ -286,7 +175,7 @@ export async function startGame() {
 
     if (onWater) {
       if (keys.upward() && player.y < waterSurface) {
-        player.y = Math.min(waterSurface, player.y + UP_SPEED * 2 * dt);
+        player.y += Math.min(waterSurface, player.y + UP_SPEED * 2 * dt);
       }
 
       if (keys.downward()) {
@@ -302,10 +191,6 @@ export async function startGame() {
     }
 
     player.y += player.vy * dt;
-    if (onWater && player.y <= waterFloorTop) {
-      player.y = waterFloorTop;
-      player.vy = 0;
-    }
     if (!onWater && !leftWaterUnderwater && isOverArenaFloor() && player.y <= 0) {
       player.y = 0;
       player.vy = 0;
