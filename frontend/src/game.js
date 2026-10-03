@@ -14,6 +14,7 @@ const CAMERA_HEIGHT = 4;
 const ORBIT_SPEED = 2;
 const UP_SPEED = 2;
 const DOWN_SPEED = 2;
+const WATER_JUMP_VELOCITY = 8;
 const REMOTE_SMOOTHING = 15;
 
 function colorFor(id) {
@@ -108,14 +109,12 @@ export async function startGame() {
 
   // Bounded flat world.
   const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(ARENA_HALF * 2, ARENA_HALF * 2),
+    new THREE.PlaneGeometry(ARENA_HALF * 2, ARENA_HALF),
     new THREE.MeshStandardMaterial({ color: 0x4e9a62, roughness: 1 }),
   );
   floor.rotation.x = -Math.PI / 2;
+  floor.position.z = -ARENA_HALF / 2;
   scene.add(floor);
-  scene.add(
-    new THREE.GridHelper(ARENA_HALF * 2, ARENA_HALF * 2, 0x376c4b, 0x5aa36a),
-  );
 
   const meadow = new THREE.Mesh(
     new THREE.CircleGeometry(72, 48),
@@ -150,7 +149,7 @@ export async function startGame() {
   }
 
   const water = new THREE.Mesh(
-    new THREE.BoxGeometry(ARENA_HALF * 2, 2, ARENA_HALF),
+    new THREE.BoxGeometry(ARENA_HALF * 2, 6, ARENA_HALF),
     new THREE.MeshStandardMaterial({
       color: 0x2d9cdb,
       transparent: true,
@@ -162,7 +161,7 @@ export async function startGame() {
   );
 
   // A shallow pool sits at the far side of the meadow.
-  water.position.set(0, -1, 10);
+  water.position.set(0, -3, 10);
 
   scene.add(water);
 
@@ -174,9 +173,12 @@ export async function startGame() {
     }),
   );
 
-  waterFloor.position.set(0, -2.1, 10);
+  waterFloor.position.set(0, -6.1, 10);
 
   scene.add(waterFloor);
+  const waterSurface = water.position.y + water.geometry.parameters.height / 2;
+  const waterFloorTop =
+    waterFloor.position.y + waterFloor.geometry.parameters.height / 2;
 
   // Remote players.
   const remotes = new Map(); // id -> { mesh, target: {x,y,z,ry} }
@@ -231,6 +233,7 @@ export async function startGame() {
     Math.abs(player.x) <= ARENA_HALF && Math.abs(player.z) <= ARENA_HALF;
   let wasOnWater = false;
   let leftWaterUnderwater = false;
+  let jumpWasDown = false;
   let previousPlayerPosition = {
     x: player.x,
     y: player.y,
@@ -265,16 +268,25 @@ export async function startGame() {
     player.x = Math.max(-limit, Math.min(limit, player.x));
     player.z = Math.max(-limit, Math.min(limit, player.z));
 
-    // Jump and gravity.
-    if (keys.jump() && player.y === 0) player.vy = JUMP_VELOCITY;
     const onWater = isOnWater(player, water);
+    const inWater = onWater && player.y < waterSurface;
+    const jumpDown = keys.jump();
+    const jumpPressed = jumpDown && !jumpWasDown;
+    jumpWasDown = jumpDown;
+
+    // Jump from land, or launch upward from the water floor/surface.
+    if (jumpPressed && !onWater && player.y === 0) {
+      player.vy = JUMP_VELOCITY;
+    } else if (jumpPressed && onWater && player.y <= waterSurface) {
+      player.vy = WATER_JUMP_VELOCITY;
+    }
     if (wasOnWater && !onWater && player.y < 0) leftWaterUnderwater = true;
     if (onWater || player.y >= 0) leftWaterUnderwater = false;
     wasOnWater = onWater;
 
     if (onWater) {
-      if (keys.upward()) {
-        player.y += UP_SPEED * 2 * dt;
+      if (keys.upward() && player.y < waterSurface) {
+        player.y = Math.min(waterSurface, player.y + UP_SPEED * 2 * dt);
       }
 
       if (keys.downward()) {
@@ -282,7 +294,7 @@ export async function startGame() {
       }
     }
 
-    if (onWater) {
+    if (inWater) {
       player.vy -= GRAVITY * 0.45 * dt;
       player.vy = Math.max(player.vy, -2);
     } else {
@@ -290,6 +302,10 @@ export async function startGame() {
     }
 
     player.y += player.vy * dt;
+    if (onWater && player.y <= waterFloorTop) {
+      player.y = waterFloorTop;
+      player.vy = 0;
+    }
     if (!onWater && !leftWaterUnderwater && isOverArenaFloor() && player.y <= 0) {
       player.y = 0;
       player.vy = 0;
