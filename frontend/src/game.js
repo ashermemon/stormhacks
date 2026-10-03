@@ -152,9 +152,9 @@ scene.add(water);
 	);
 
 	underwaterBox.position.set(
-	  -ARENA_HALF / 12,
+	  -ARENA_HALF / 48,
 	  -1,
-	  ARENA_HALF / 12
+	  ARENA_HALF / 48
 	);
 
 scene.add(water);
@@ -267,11 +267,11 @@ scene.add(waterFloor);
 
 	if (onWater) {
 	  if (keys.upward()) {
-		player.y += UP_SPEED * 2 * dt;
+		player.y += UP_SPEED * 4 * dt;
 	  }
 
 	  if (keys.downward()) {
-		player.y -= DOWN_SPEED * dt;
+		player.y -= DOWN_SPEED * 6 * dt;
 	  }
 	}
 
