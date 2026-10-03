@@ -1,8 +1,9 @@
-import * as THREE from 'three';
-import { connect } from './net.js';
-import { keys } from './input.js';
-import { isOnWater } from './functions.js';
-
+import * as THREE from "three";
+import { connect } from "./net.js";
+import { keys } from "./input.js";
+import { isOnWater } from "./functions.js";
+import { createWater } from "./water.js";
+import { createEnvironment } from "./environment.js";
 
 const ARENA_HALF = 20;
 const AVATAR = { w: 1, h: 2, d: 0.6 };
@@ -15,6 +16,7 @@ const CAMERA_HEIGHT = 4;
 const ORBIT_SPEED = 2;
 const UP_SPEED = 2;
 const DOWN_SPEED = 2;
+const WATER_JUMP_VELOCITY = 8;
 const REMOTE_SMOOTHING = 15;
 
 function colorFor(id) {
@@ -58,13 +60,13 @@ function createAvatar(color) {
   const group = new THREE.Group();
   const body = new THREE.Mesh(
     new THREE.BoxGeometry(AVATAR.w, AVATAR.h, AVATAR.d),
-    new THREE.MeshStandardMaterial({ color })
+    new THREE.MeshStandardMaterial({ color }),
   );
   body.position.y = AVATAR.h / 2;
   // Lighter strip on the front (+z) so facing direction is visible.
   const face = new THREE.Mesh(
     new THREE.BoxGeometry(AVATAR.w * 0.6, AVATAR.h * 0.2, 0.05),
-    new THREE.MeshStandardMaterial({ color: 0xffffff })
+    new THREE.MeshStandardMaterial({ color: 0xffffff }),
   );
   face.position.set(0, AVATAR.h * 0.8, AVATAR.d / 2 + 0.025);
   group.add(body, face);
@@ -78,22 +80,27 @@ function lerpAngle(a, b, t) {
 
 export async function startGame() {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x87ceeb);
-  scene.fog = new THREE.Fog(0x87ceeb, 40, 120);
+  createEnvironment(scene, ARENA_HALF);
 
-  const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
+  const camera = new THREE.PerspectiveCamera(
+    70,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    500,
+  );
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
 
-  window.addEventListener('resize', () => {
+  window.addEventListener("resize", () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
+  const { water, waterSurface } = createWater(scene);
   scene.add(new THREE.HemisphereLight(0xffffff, 0x556655, 1.2));
   const sun = new THREE.DirectionalLight(0xffffff, 1.5);
   sun.position.set(10, 20, 5);
@@ -213,7 +220,7 @@ scene.add(waterFloor);
       }
     },
     onClose() {
-      alert('Disconnected from server. Reload to rejoin.');
+      alert("Disconnected from server. Reload to rejoin.");
     },
   });
 
@@ -227,16 +234,26 @@ scene.add(waterFloor);
 
   let cameraYaw = 0;
   let dragging = false;
-  renderer.domElement.addEventListener('pointerdown', () => (dragging = true));
-  window.addEventListener('pointerup', () => (dragging = false));
-  window.addEventListener('pointermove', (e) => {
+  renderer.domElement.addEventListener("pointerdown", () => (dragging = true));
+  window.addEventListener("pointerup", () => (dragging = false));
+  window.addEventListener("pointermove", (e) => {
     if (dragging) cameraYaw -= e.movementX * 0.005;
   });
 
   let sendTimer = 0;
   const clock = new THREE.Clock();
   const limit = ARENA_HALF - AVATAR.w / 2;
-  let previousPlayerPosition = { x:player.x, y:player.y, z:player.z, ry: player.ry};
+  const isOverArenaFloor = () =>
+    Math.abs(player.x) <= ARENA_HALF && Math.abs(player.z) <= ARENA_HALF;
+  let wasOnWater = false;
+  let leftWaterUnderwater = false;
+  let jumpWasDown = false;
+  let previousPlayerPosition = {
+    x: player.x,
+    y: player.y,
+    z: player.z,
+    ry: player.ry,
+  };
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.1);
 
@@ -256,41 +273,53 @@ scene.add(waterFloor);
       dz /= len;
       player.x += dx * SPEED * dt;
       player.z += dz * SPEED * dt;
-      player.ry = lerpAngle(player.ry, Math.atan2(dx, dz), 1 - Math.exp(-15 * dt));
+      player.ry = lerpAngle(
+        player.ry,
+        Math.atan2(dx, dz),
+        1 - Math.exp(-15 * dt),
+      );
     }
-    //~ player.x = Math.max(-limit, Math.min(limit, player.x));
-    //~ player.z = Math.max(-limit, Math.min(limit, player.z));
+    player.x = Math.max(-limit, Math.min(limit, player.x));
+    player.z = Math.max(-limit, Math.min(limit, player.z));
 
-    // Jump and gravity.
-    if (keys.jump() && player.y === 0) player.vy = JUMP_VELOCITY;
     const onWater = isOnWater(player, water);
+    const inWater = onWater && player.y < waterSurface;
+    const jumpDown = keys.jump();
+    const jumpPressed = jumpDown && !jumpWasDown;
+    jumpWasDown = jumpDown;
 
-	if (onWater) {
-	  if (keys.upward()) {
-		player.y += UP_SPEED * 4 * dt;
-	  }
+    // Jump from land, or launch upward from the water floor/surface.
+    if (jumpPressed && !onWater && player.y === 0) {
+      player.vy = JUMP_VELOCITY;
+    } else if (jumpPressed && onWater && player.y <= waterSurface) {
+      player.vy = WATER_JUMP_VELOCITY;
+    }
+    if (wasOnWater && !onWater && player.y < 0) leftWaterUnderwater = true;
+    if (onWater || player.y >= 0) leftWaterUnderwater = false;
+    wasOnWater = onWater;
 
-	  if (keys.downward()) {
-		player.y -= DOWN_SPEED * 6 * dt;
-	  }
-	}
+    if (onWater) {
+      if (keys.upward() && player.y < waterSurface) {
+        player.y += Math.min(waterSurface, player.y + UP_SPEED * 2 * dt);
+      }
 
-	if (onWater) {
-	  player.vy -= GRAVITY * 0.25 * dt;
-	  player.vy = Math.max(player.vy, -2);
-	} else {
-	  player.vy -= GRAVITY * dt;
-	}
-	const underwater = onWater && player.y < 0;
+      if (keys.downward()) {
+        player.y -= DOWN_SPEED * dt;
+      }
+    }
 
-	underwaterOverlay.style.opacity = underwater ? '1' : '0';
-
+    if (inWater) {
+      player.vy -= GRAVITY * 0.45 * dt;
+      player.vy = Math.max(player.vy, -2);
+    } else {
+      player.vy -= GRAVITY * dt;
+    }
 
     player.y += player.vy * dt;
-    if (!onWater && player.y <= 0) {
-	  player.y = 0;
-	  player.vy = 0;
-	}
+    if (!onWater && !leftWaterUnderwater && isOverArenaFloor() && player.y <= 0) {
+      player.y = 0;
+      player.vy = 0;
+    }
 
     me.position.set(player.x, player.y, player.z);
     me.rotation.y = player.ry;
@@ -299,13 +328,18 @@ scene.add(waterFloor);
     camera.position.set(
       player.x + Math.sin(cameraYaw) * CAMERA_DISTANCE,
       player.y + CAMERA_HEIGHT,
-      player.z + Math.cos(cameraYaw) * CAMERA_DISTANCE
+      player.z + Math.cos(cameraYaw) * CAMERA_DISTANCE,
     );
     camera.lookAt(player.x, player.y + AVATAR.h, player.z);
  
     // Network.
     sendTimer += dt;
-    if(previousPlayerPosition.x !== player.x || previousPlayerPosition.y !== player.y || previousPlayerPosition.z !== player.z || previousPlayerPosition.ry !== player.ry) {
+    if (
+      previousPlayerPosition.x !== player.x ||
+      previousPlayerPosition.y !== player.y ||
+      previousPlayerPosition.z !== player.z ||
+      previousPlayerPosition.ry !== player.ry
+    ) {
       previousPlayerPosition.x = player.x;
       previousPlayerPosition.y = player.y;
       previousPlayerPosition.z = player.z;
@@ -315,7 +349,7 @@ scene.add(waterFloor);
       sendTimer = 0;
       net.sendState({ x: player.x, y: player.y, z: player.z, ry: player.ry });
     }
-   
+
     // Smooth remote players toward their latest state.
     const t = 1 - Math.exp(-REMOTE_SMOOTHING * dt);
     for (const { mesh, target } of remotes.values()) {
