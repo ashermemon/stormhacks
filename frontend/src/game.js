@@ -255,7 +255,7 @@ scene.add(waterFloor);
 
 	if (onWater) {
 	  if (keys.upward()) {
-		player.y += UP_SPEED * 16 * dt;
+		player.y += UP_SPEED * 2 * dt;
 	  }
 
 	  if (keys.downward()) {
@@ -263,7 +263,13 @@ scene.add(waterFloor);
 	  }
 	}
 
-    player.vy -= GRAVITY * dt;
+	if (onWater) {
+	  player.vy -= GRAVITY * 0.25 * dt;
+	  player.vy = Math.max(player.vy, -2);
+	} else {
+	  player.vy -= GRAVITY * dt;
+	}
+
     player.y += player.vy * dt;
     if (!onWater && player.y <= 0) {
 	  player.y = 0;
