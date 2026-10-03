@@ -16,6 +16,14 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+const cube = new THREE.Mesh(
+  new THREE.BoxGeometry(1, 1, 1),
+  new THREE.MeshNormalMaterial()
+);
+scene.add(cube);
+
 renderer.setAnimationLoop(() => {
+  cube.rotation.x += 0.01;
+  cube.rotation.y += 0.01;
   renderer.render(scene, camera);
 });
