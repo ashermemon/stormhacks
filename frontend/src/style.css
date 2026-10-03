@@ -25,6 +25,7 @@ canvas {
   margin: 0 0 24px;
   font-size: 56px;
   letter-spacing: 2px;
+  user-select: none;
 }
 
 #menu button {
