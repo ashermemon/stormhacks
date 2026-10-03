@@ -1,0 +1,88 @@
+/* z-index sits above the underwater overlay (9999) in game.js. */
+#chat {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  width: min(420px, calc(100vw - 24px));
+  z-index: 10000;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+  color: #fff;
+  pointer-events: none;
+}
+
+#chat-log {
+  max-height: 180px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.chat-line {
+  padding: 2px 6px;
+  margin-bottom: 2px;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+  transition: opacity 0.6s ease;
+}
+
+.chat-line.faded {
+  opacity: 0;
+}
+
+.chat-line.system {
+  color: #cfd8dc;
+  font-style: italic;
+}
+
+.chat-line.error {
+  color: #ff8a80;
+}
+
+.chat-name {
+  font-weight: 600;
+}
+
+#chat-input {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  font: inherit;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 4px;
+  outline: none;
+  pointer-events: auto;
+}
+
+#chat-input[hidden] {
+  display: none;
+}
+
+#chat-bubbles {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.chat-bubble {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: 220px;
+  padding: 4px 10px;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+  color: #111;
+  background: #fff;
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+  text-align: center;
+  white-space: pre-wrap;
+}

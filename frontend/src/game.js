@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { connect } from './net.js';
 import { keys } from './input.js';
 import { isOnWater } from './functions.js';
+import { createChat } from './chat.js';
 
 
 const ARENA_HALF = 20;
@@ -225,6 +226,12 @@ scene.add(waterFloor);
   const player = { x: spawn(), y: 0, z: spawn(), vy: 0, ry: 0 };
   scene.add(me);
 
+  const chat = createChat({
+    net,
+    camera,
+    getAvatar: (id) => (id === net.id ? me : remotes.get(id)?.mesh),
+  });
+
   let cameraYaw = 0;
   let dragging = false;
   renderer.domElement.addEventListener('pointerdown', () => (dragging = true));
@@ -326,5 +333,6 @@ scene.add(waterFloor);
     }
 
     renderer.render(scene, camera);
+    chat.update();
   });
 }

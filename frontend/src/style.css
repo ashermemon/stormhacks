@@ -57,3 +57,17 @@ canvas {
 body {
   background: #111;
 }
+
+#menu #name-input {
+  box-sizing: border-box;
+  width: 240px;
+  padding: 12px 14px;
+  font-size: 18px;
+  font-family: inherit;
+  color: #fff;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.35);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  outline: none;
+}
