@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { connect } from './net.js';
 import { keys } from './input.js';
+import { isOnWater } from './functions.js';
+
 
 const ARENA_HALF = 20;
 const AVATAR = { w: 1, h: 2, d: 0.6 };
@@ -11,12 +13,35 @@ const SEND_INTERVAL = 1 / 30;
 const CAMERA_DISTANCE = 8;
 const CAMERA_HEIGHT = 4;
 const ORBIT_SPEED = 2;
+const UP_SPEED = 2;
+const DOWN_SPEED = 2;
 const REMOTE_SMOOTHING = 15;
 
 function colorFor(id) {
   return new THREE.Color().setHSL((parseInt(id, 16) % 360) / 360, 0.7, 0.55);
 }
 
+const raycaster = new THREE.Raycaster();
+
+function tryPickupUnderwaterBox() {
+  raycaster.setFromCamera(
+	new THREE.Vector2(0, 0),
+	camera
+  );
+
+  const hits = raycaster.intersectObject(underwaterBox);
+
+  if (hits.length === 0) return;
+
+  const distance = camera.position.distanceTo(underwaterBox.position);
+
+  if (distance > 3) return;
+
+  // Pick up
+  underwaterBox.visible = false;
+
+  player.hasUnderwaterBox = true;
+}
 function createAvatar(color) {
   const group = new THREE.Group();
   const body = new THREE.Mesh(
@@ -80,8 +105,75 @@ export async function startGame() {
   ]) {
     const wall = new THREE.Mesh(new THREE.BoxGeometry(w, 1, d), wallMaterial);
     wall.position.set(x, 0.5, z);
-    scene.add(wall);
   }
+
+	const water = new THREE.Mesh(
+  new THREE.BoxGeometry(
+    ARENA_HALF * 2,
+    2,
+    ARENA_HALF
+  ),
+  new THREE.MeshStandardMaterial({
+    color: 0x2d9cdb,
+    transparent: true,
+    opacity: 0.4,
+    roughness: 0.2,
+    metalness: 0.1,
+    depthWrite: false
+  })
+);
+
+// South of the arena, outside the walls
+water.position.set(
+  0,
+  -20,
+  ARENA_HALF + ARENA_HALF / 2
+);
+
+scene.add(water);
+
+	const underwaterBox = new THREE.Mesh(
+	new THREE.BoxGeometry(1, 1, 1),
+	new THREE.MeshStandardMaterial({
+		color: 0x000000
+	  })
+	);
+
+	underwaterBox.position.set(
+	  -ARENA_HALF / 2,
+	  -1,
+	  ARENA_HALF / 2
+	);
+
+scene.add(water);
+
+const waterFloor = new THREE.Mesh(
+  new THREE.BoxGeometry(
+    ARENA_HALF * 2,
+    0.2,
+    ARENA_HALF
+  ),
+  new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 0.8
+  })
+);
+
+waterFloor.position.set(
+  0,
+  -2.1,
+  ARENA_HALF + ARENA_HALF / 2
+);
+
+scene.add(waterFloor);
+
+
+
+	
+
+
+	//~ scene.add(water);
+
 
   // Remote players.
   const remotes = new Map(); // id -> { mesh, target: {x,y,z,ry} }
@@ -132,6 +224,7 @@ export async function startGame() {
   let sendTimer = 0;
   const clock = new THREE.Clock();
   const limit = ARENA_HALF - AVATAR.w / 2;
+  let previousPlayerPosition = { x:player.x, y:player.y, z:player.z, ry: player.ry};
 
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.1);
@@ -154,17 +247,29 @@ export async function startGame() {
       player.z += dz * SPEED * dt;
       player.ry = lerpAngle(player.ry, Math.atan2(dx, dz), 1 - Math.exp(-15 * dt));
     }
-    player.x = Math.max(-limit, Math.min(limit, player.x));
-    player.z = Math.max(-limit, Math.min(limit, player.z));
+    //~ player.x = Math.max(-limit, Math.min(limit, player.x));
+    //~ player.z = Math.max(-limit, Math.min(limit, player.z));
 
     // Jump and gravity.
     if (keys.jump() && player.y === 0) player.vy = JUMP_VELOCITY;
+    const onWater = isOnWater(player, water);
+
+	if (onWater) {
+	  if (keys.upward()) {
+		player.y += UP_SPEED * 16 * dt;
+	  }
+
+	  if (keys.downward()) {
+		player.y -= DOWN_SPEED * dt;
+	  }
+	}
+
     player.vy -= GRAVITY * dt;
     player.y += player.vy * dt;
-    if (player.y <= 0) {
-      player.y = 0;
-      player.vy = 0;
-    }
+    if (!onWater && player.y <= 0) {
+	  player.y = 0;
+	  player.vy = 0;
+	}
 
     me.position.set(player.x, player.y, player.z);
     me.rotation.y = player.ry;
@@ -179,11 +284,19 @@ export async function startGame() {
 
     // Network.
     sendTimer += dt;
+    if (previousPlayerPosition.x !== player.x || previousPlayerPosition.y !== player.y || previousPlayerPosition.z !== player.z ||previousPlayerPosition.ry !== player.ry)
+    {
+		previousPlayerPosition.x = player.x;
+		previousPlayerPosition.y = player.y;
+		previousPlayerPosition.z = player.z;
+		previousPlayerPosition.ry = player.ry;
+    
     if (sendTimer >= SEND_INTERVAL) {
       sendTimer = 0;
       net.sendState({ x: player.x, y: player.y, z: player.z, ry: player.ry });
     }
-
+    
+}
     // Smooth remote players toward their latest state.
     const t = 1 - Math.exp(-REMOTE_SMOOTHING * dt);
     for (const { mesh, target } of remotes.values()) {
