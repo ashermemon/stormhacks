@@ -23,6 +23,7 @@ function addTree(scene, x, z, scale = 1) {
   tree.add(trunk, crown);
   tree.position.set(x, 0, z);
   scene.add(tree);
+  return tree;
 }
 
 function addRock(scene, x, z, scale = 1) {
@@ -37,6 +38,7 @@ function addRock(scene, x, z, scale = 1) {
   rock.scale.y = 0.6;
   rock.position.set(x, scale * 0.45, z);
   scene.add(rock);
+  return rock;
 }
 
 function addMountain(scene, x, z, width, height, color) {
@@ -72,6 +74,7 @@ function addGround(scene, arenaHalf) {
 }
 
 export function createEnvironment(scene, arenaHalf) {
+  const collisionObjects = [];
   scene.background = new THREE.Color(0x9bd8ed);
   scene.fog = new THREE.Fog(0x9bd8ed, 45, 115);
 
@@ -92,7 +95,7 @@ export function createEnvironment(scene, arenaHalf) {
     [-7, -18, 0.75],
     [8, 18, 0.8],
   ]) {
-    addTree(scene, x, z, scale);
+    collisionObjects.push(addTree(scene, x, z, scale));
   }
 
   for (const [x, z, scale] of [
@@ -101,7 +104,7 @@ export function createEnvironment(scene, arenaHalf) {
     [-16, 13, 0.7],
     [14, 17, 0.9],
   ]) {
-    addRock(scene, x, z, scale);
+    collisionObjects.push(addRock(scene, x, z, scale));
   }
 
   addMountain(scene, -46, -38, 18, 26, 0x476b68);
@@ -122,5 +125,44 @@ export function createEnvironment(scene, arenaHalf) {
     );
     wall.position.set(x, 0.5, z);
     scene.add(wall);
+    collisionObjects.push(wall);
   }
+
+  const collisionBoxes = collisionObjects.map((object) =>
+    shrinkCollisionBox(new THREE.Box3().setFromObject(object), 0.7),
+  );
+
+  function resolveHorizontalMovement(player, deltaX, deltaZ, radius) {
+    let nextX = player.x + deltaX;
+    let nextZ = player.z;
+
+    if (collisionBoxes.some((box) => overlaps(box, nextX, nextZ, radius))) {
+      nextX = player.x;
+    }
+
+    nextZ = player.z + deltaZ;
+    if (collisionBoxes.some((box) => overlaps(box, nextX, nextZ, radius))) {
+      nextZ = player.z;
+    }
+
+    player.x = nextX;
+    player.z = nextZ;
+  }
+
+  return { resolveHorizontalMovement };
+}
+
+function overlaps(box, x, z, radius) {
+  return (
+    x + radius > box.min.x &&
+    x - radius < box.max.x &&
+    z + radius > box.min.z &&
+    z - radius < box.max.z
+  );
+}
+
+function shrinkCollisionBox(box, factor) {
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3()).multiplyScalar(factor);
+  return new THREE.Box3().setFromCenterAndSize(center, size);
 }

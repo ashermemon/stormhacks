@@ -29,7 +29,7 @@ function lerpAngle(a, b, t) {
 
 export async function startGame() {
   const scene = new THREE.Scene();
-  createEnvironment(scene, ARENA_HALF);
+  const environment = createEnvironment(scene, ARENA_HALF);
 
   const camera = new THREE.PerspectiveCamera(
     70,
@@ -123,8 +123,12 @@ export async function startGame() {
     if (len > 0) {
       dx /= len;
       dz /= len;
-      player.x += dx * SPEED * dt;
-      player.z += dz * SPEED * dt;
+      environment.resolveHorizontalMovement(
+        player,
+        dx * SPEED * dt,
+        dz * SPEED * dt,
+        AVATAR.w / 2,
+      );
       player.ry = lerpAngle(
         player.ry,
         Math.atan2(dx, dz),
