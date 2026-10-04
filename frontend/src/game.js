@@ -100,11 +100,13 @@ export async function startGame() {
   const chat = createChat({ net, camera, getCharacter: characterOf });
 
   let cameraYaw = 0;
-  let dragging = false;
-  renderer.domElement.addEventListener("pointerdown", () => (dragging = true));
-  window.addEventListener("pointerup", () => (dragging = false));
-  window.addEventListener("pointermove", (e) => {
-    if (dragging) cameraYaw -= e.movementX * 0.005;
+  // Mouse look: click the game to lock the cursor, then just move the mouse. Esc releases it.
+  const canvas = renderer.domElement;
+  const lockPointer = () => canvas.requestPointerLock()?.catch?.(() => {});
+  canvas.addEventListener("click", lockPointer);
+  lockPointer(); // may work straight away thanks to the Play button click
+  window.addEventListener("mousemove", (e) => {
+    if (document.pointerLockElement === canvas) cameraYaw -= e.movementX * 0.005;
   });
 
   let sendTimer = 0;
