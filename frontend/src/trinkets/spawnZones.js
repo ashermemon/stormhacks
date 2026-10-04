@@ -2,9 +2,7 @@
 //
 // Map contract (World.glb): any mesh with `userData.spawnZone` (e.g. "pond", "stream")
 // sitting exactly on the underwater floor, normals pointing up into the water.
-// When the real map lands, replace createStandInZone() in game.js with:
-//
-//   const zones = collectSpawnZones(worldGltf.scene);
+// game.js calls collectSpawnZones(world.root) once World.glb has loaded.
 //
 // Positions come from the trinket's server seed, so every client puts the same
 // trinket in the same spot without the server knowing anything about the map.
@@ -61,17 +59,4 @@ export function spawnPointFromSeed(zones, seed) {
   zone.mesh.localToWorld(position);
   normal.transformDirection(zone.mesh.matrixWorld);
   return { position, normal, yaw: random() * Math.PI * 2 };
-}
-
-/** Stand-in for the current box-shaped channel. Delete once World.glb provides real zones. */
-export function createStandInZone(scene, { floorY, width, length }) {
-  const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(width, length).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial(),
-  );
-  mesh.name = "SpawnZone_StandIn";
-  mesh.position.y = floorY;
-  mesh.userData = { spawnZone: "stream" };
-  scene.add(mesh);
-  return mesh;
 }
