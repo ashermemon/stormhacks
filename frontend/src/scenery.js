@@ -45,6 +45,7 @@ const LOD_RANGE = MOBILE ? 0.6 : 1; // phones draw the small stuff over a shorte
 const MAX_WALK_HEIGHT = 4.5; // obstacles only matter where the otter can walk
 const BENCH_SCALE = 1.8; // built at the otter model's scale (character.js MODEL_SCALE)
 const BENCH_COUNT = 4;
+const BENCH_CLEARANCE = 10; // this far beyond the spawn and campfire clearings (16 from a fire)
 const BENCH_SPACING = 45; // at least this far apart, so the few there are spread out
 const VIEW_LIMIT = 170; // past the fog (environment.js), nothing needs drawing
 const FADE_BAND = 0.2; // each instance dissolves over the last 20% of its draw distance...
@@ -110,20 +111,22 @@ const WHITE = new THREE.Color(1, 1, 1);
  * @param scene   the scene to add the props to (call before toonifyScene)
  * @param world   what loadWorld returned
  * @param clearings  [{x, z, r}] spots kept free of trees and rocks (e.g. the spawn)
- * @param campNear   {x, z} to put the campfire spot a short walk from (e.g. the spawn)
+ * @param camps      campfire spots to find (see findCampsite): [{ near, ring?, ideal?, faceStream? }]
  */
-export async function createScenery(scene, world, { clearings = [], campNear = null } = {}) {
+export async function createScenery(scene, world, { clearings = [], camps = [] } = {}) {
   const models = await loadModels();
   const field = buildField(world);
   const scatter = new Scatter(models, field);
-  // The campfire spot is picked first, so trees, rocks and bushes keep clear of it.
-  const campsite = campNear ? findCampsite(field, campNear) : null;
-  const allClearings = campsite ? [...clearings, { x: campsite.x, z: campsite.z, r: CAMP_RADIUS }] : clearings;
-  placeEverything(scatter, field, world, allClearings);
-  if (campsite) {
-    const growth = ["meadowGrass", "tallGrass", "shortGrass", "flowers3", "flowers4"];
-    scatter.clearAround(campsite.x, campsite.z, CAMP_RADIUS - 0.3, growth);
+  // Campfire spots are picked first, so trees, rocks and bushes keep clear of them.
+  const campsites = [];
+  for (const camp of camps) {
+    const site = findCampsite(field, camp, campsites);
+    if (site) campsites.push(site);
   }
+  const allClearings = [...clearings, ...campsites.map((c) => ({ x: c.x, z: c.z, r: CAMP_RADIUS }))];
+  placeEverything(scatter, field, world, allClearings);
+  const growth = ["meadowGrass", "tallGrass", "shortGrass", "flowers3", "flowers4"];
+  for (const c of campsites) scatter.clearAround(c.x, c.z, CAMP_RADIUS - 0.3, growth);
   const chunks = scatter.build(scene);
 
   // Benches, for sitting on (seating.js): heading plus the seat and stand spots in world space.
@@ -145,7 +148,7 @@ export async function createScenery(scene, world, { clearings = [], campNear = n
   const cam = new THREE.Vector3();
   return {
     benches,
-    campsite, // {x, y, z} for campfire.js, or null
+    campsites, // [{x, y, z, toWater}] for campfire.js
     update(camera) {
       camera.getWorldPosition(cam);
       for (const chunk of chunks) {
@@ -514,22 +517,28 @@ function makeNoise(seed) {
 // ---------------------------------------------------------------------------
 // Placement
 // ---------------------------------------------------------------------------
-const CAMP_DISTANCE = 16; // the campfire sits about this far from `campNear`
-const CAMP_RADIUS = 6; // its footprint: the fire, the log seats and room to walk round
+const CAMP_RADIUS = 6; // a campfire's footprint: the fire, the log seats and room to walk round
+const CAMP_SPACING = 30; // campfires keep at least this far apart
+const STREAM_MAX_Z = 0; // the stream is the water north of the pond (z below this)
 
-// A cozy spot for the campfire: flat, dry meadow a short walk from `near`, away from
-// the water and the foot of the mountains. Null if there's nowhere suitable.
-function findCampsite(field, near) {
+/**
+ * A cozy spot for a campfire: flat, dry meadow away from the water's edge and the foot
+ * of the mountains, between `ring` = [min, max] units from `near`, ideally `ideal`
+ * away. `toWater` points at the nearest water, or at the stream if `faceStream`.
+ * Null if there's nowhere suitable.
+ */
+function findCampsite(field, { near, ring = [10, 30], ideal = 16, faceStream = false }, others) {
   const { ground, zone, waterDist, wildDist } = field;
   let best = null;
   let bestScore = Infinity;
-  for (let dz = -30; dz <= 30; dz += 2) {
-    for (let dx = -30; dx <= 30; dx += 2) {
+  for (let dz = -ring[1]; dz <= ring[1]; dz += 2) {
+    for (let dx = -ring[1]; dx <= ring[1]; dx += 2) {
       const distance = Math.hypot(dx, dz);
-      if (distance < 10 || distance > 30) continue;
+      if (distance < ring[0] || distance > ring[1]) continue;
       const x = near.x + dx;
       const z = near.z + dz;
       if (zone(x, z) !== GRASS || waterDist(x, z) < 7 || wildDist(x, z) < 8) continue;
+      if (others.some((o) => Math.hypot(o.x - x, o.z - z) < CAMP_SPACING)) continue;
       // The whole footprint has to be dry, grassy and nearly level.
       let low = ground(x, z);
       let high = low;
@@ -546,7 +555,7 @@ function findCampsite(field, near) {
         }
       }
       if (!fits) continue;
-      const score = Math.abs(distance - CAMP_DISTANCE) * 0.2 + (high - low) * 10;
+      const score = Math.abs(distance - ideal) * 0.2 + (high - low) * 10;
       if (score < bestScore) {
         bestScore = score;
         best = { x, z };
@@ -554,12 +563,33 @@ function findCampsite(field, near) {
     }
   }
   if (!best) return null;
-  // Which way the nearest water lies: where the distance to it falls fastest.
-  const gx = waterDist(best.x + 2, best.z) - waterDist(best.x - 2, best.z);
-  const gz = waterDist(best.x, best.z + 2) - waterDist(best.x, best.z - 2);
-  const length = Math.hypot(gx, gz) || 1;
-  return { ...best, y: ground(best.x, best.z), toWater: { x: -gx / length, z: -gz / length } };
+
+  let toWater = null;
+  if (faceStream) {
+    // The nearest bit of the stream.
+    let nearest = Infinity;
+    for (let dz = -40; dz <= 40; dz++) {
+      for (let dx = -40; dx <= 40; dx++) {
+        const x = best.x + dx;
+        const z = best.z + dz;
+        const d = Math.hypot(dx, dz);
+        if (z < STREAM_MAX_Z && d < nearest && ground(x, z) < WATER_SURFACE_Y) {
+          nearest = d;
+          toWater = { x: dx / d, z: dz / d };
+        }
+      }
+    }
+  }
+  if (!toWater) {
+    // The nearest water: where the distance to it falls fastest.
+    const gx = waterDist(best.x + 2, best.z) - waterDist(best.x - 2, best.z);
+    const gz = waterDist(best.x, best.z + 2) - waterDist(best.x, best.z - 2);
+    const length = Math.hypot(gx, gz) || 1;
+    toWater = { x: -gx / length, z: -gz / length };
+  }
+  return { ...best, y: ground(best.x, best.z), toWater };
 }
+
 function placeEverything(scatter, field, world, clearings) {
   const { ground, zone, slope, waterDist, wildDist, footing, inCave, meadowLight, mapHalf } = field;
   const random = seededRandom(SEED);
@@ -804,7 +834,7 @@ function placeEverything(scatter, field, world, clearings) {
   // --- Benches: a short way back from the banks, each looking out over the water. ---
   const spots = [];
   grid(3, (x, z) => {
-    if (!onDryGrass(x, z) || slope(x, z) > 0.25 || cleared(x, z, 2)) return;
+    if (!onDryGrass(x, z) || slope(x, z) > 0.25 || cleared(x, z, BENCH_CLEARANCE)) return;
     const w = waterDist(x, z);
     if (w >= 3.5 && w <= 6) spots.push({ x, z, order: random() });
   });
