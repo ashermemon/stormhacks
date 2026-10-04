@@ -43,6 +43,11 @@ names = {}  # id -> display name
 store = IdentityStore()
 trinket_store = TrinketStore()
 world = TrinketWorld(trinket_store)
+HAT_PRICES = {
+    "hat": 100,
+    "wizardHat": 250,
+}
+
 
 
 def http_response(status, body, content_type="text/plain; charset=utf-8", extra=None):
@@ -230,6 +235,61 @@ async def handler(ws):
                     exclude=pid,
                 )
                 await send(ws, {"type": "trinket_spawn", "trinket": replacement})
+            elif kind == "hat_purchase":
+                hat_id = msg.get("hat")
+                price = HAT_PRICES.get(hat_id)
+
+                if price is None:
+                    await send(
+                        ws,
+                        {
+                            "type": "hat_purchase",
+                            "ok": False,
+                            "hat": hat_id,
+                            "message": "Unknown hat.",
+                        },
+                    )
+                    continue
+
+                print(
+                    "HAT PURCHASE:",
+                    "pid=", pid,
+                    "hat=", hat_id,
+                    "price=", price,
+                    "journal=", trinket_store.journal(pid),
+                )
+                shells = trinket_store.spend_shells(
+                    pid,
+                    price,
+                )
+
+                if shells is None:
+                    journal = trinket_store.journal(pid)
+                    await send(
+                        ws,
+                        {
+                            "type": "hat_purchase",
+                            "ok": False,
+                            "hat": hat_id,
+                            "price": price,
+                            "shells": journal["shells"],
+                            "message": "Not enough shells.",
+                        },
+                    )
+                    continue
+
+                await send(
+                    ws,
+                    {
+                        "type": "hat_purchase",
+                        "ok": True,
+                        "hat": hat_id,
+                        "price": price,
+                        "shells": shells,
+                        "journal": trinket_store.journal(pid),
+                    },
+                )
+
     finally:
         # A replaced session must not clean up the identity's newer session.
         if players.get(pid) is ws:

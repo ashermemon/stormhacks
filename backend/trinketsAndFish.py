@@ -134,10 +134,78 @@ class TrinketStore:
         finds = dict(
             self.db.execute("SELECT item, count FROM trinket_finds WHERE player_id=?", (pid,))
         )
+        with self.db: 
+            self.db.execute( """ INSERT OR IGNORE INTO trinket_wallet (player_id, shells) VALUES (?, ?) """, (pid, 10000), )
+
         row = self.db.execute(
             "SELECT shells FROM trinket_wallet WHERE player_id=?", (pid,)
         ).fetchone()
-        return {"trinkets": trinkets, "finds": finds, "shells": row[0] if row else 0}
+        return {"trinkets": trinkets, "finds": finds, "shells": row[0] if row else 10000}
+        
+    def spend_shells(self, pid, amount):
+        """Atomically deduct shells from a player's wallet.
+
+        Returns the new shell balance on success, or None if the player
+        does not have enough shells.
+        """
+        cost = int(amount)
+
+        if cost < 0:
+            return None
+
+        with self.db:
+            wallet = self.db.execute(
+                """
+                SELECT player_id, shells
+                FROM trinket_wallet
+                WHERE player_id = ?
+                """,
+                (pid,),
+            ).fetchone()
+
+            print(
+                "SPEND SHELLS:",
+                "pid=", pid,
+                "cost=", cost,
+                "wallet=", wallet,
+            )
+
+            cursor = self.db.execute(
+                """
+                UPDATE trinket_wallet
+                SET shells = shells - ?
+                WHERE player_id = ?
+                AND shells >= ?
+                """,
+                (cost, pid, cost),
+            )
+
+            print(
+                "SPEND SHELLS UPDATE:",
+                "rowcount=", cursor.rowcount,
+            )
+
+            if cursor.rowcount != 1:
+                return None
+
+            row = self.db.execute(
+                """
+                SELECT shells
+                FROM trinket_wallet
+                WHERE player_id = ?
+                """,
+                (pid,),
+            ).fetchone()
+
+        print(
+            "SPEND SHELLS RESULT:",
+            "pid=", pid,
+            "new_shells=", row[0] if row else None,
+        )
+
+        return row[0] if row else None
+
+
 
 
 class TrinketWorld:

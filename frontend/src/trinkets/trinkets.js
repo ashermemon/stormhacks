@@ -120,7 +120,6 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   const glintTexture = makeGlintTexture();
   const particleGeometry = new THREE.IcosahedronGeometry(1, 0);
   const journal = createJournal(net.trinketCatalog, net.journal, onJournalToggle);
-  let wardrobe = null;
   let crack = null; // null | { turning } | { pending } | { beats, grades, t } | { waiting }
   let reveal = null;
   let shake = 0;
@@ -136,20 +135,93 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   const ring = rhythm.querySelector(".ring");
   const pips = rhythm.querySelector(".pips");
   const gradeText = rhythm.querySelector(".grade");
+  
+  let wardrobe = null;
+
   function toggleWardrobe() {
-    const character = getCharacter(net.id);
+    const character =
+      getCharacter(net.id);
 
     if (!character) {
-      console.warn("Cannot open wardrobe: character is not loaded.");
+      console.warn(
+        "Cannot open wardrobe: character is not loaded.",
+      );
+
       return;
     }
+  let pendingHatPurchase = null;
 
-    if (!wardrobe) {
-      wardrobe = createWardrobe(character);
+  net.on(
+    "hat_purchase",
+    (message) => {
+      if (!pendingHatPurchase) {
+        return;
+      }
+
+      const pending =
+        pendingHatPurchase;
+
+      pendingHatPurchase = null;
+
+      if (message.ok) {
+        if (message.journal) {
+          journal.update(
+            message.journal,
+          );
+        }
+
+        if (
+          message.shells !== undefined
+        ) {
+          setShells(message.shells);
+        }
+      } else {
+        flash(
+          toast,
+          message.message ||
+            "Hat purchase failed.",
+          "bad",
+        );
+      }
+
+      pending.resolve(
+        message.ok === true,
+      );
+    },
+  );
+
+  function purchaseHat(hatId) {
+    if (pendingHatPurchase) {
+      return Promise.resolve(false);
     }
+
+    return new Promise(
+      (resolve) => {
+        pendingHatPurchase = {
+          resolve,
+        };
+
+        net.send({
+          type: "hat_purchase",
+          hat: hatId,
+        });
+      },
+    );
+  }
+  if (!wardrobe) {
+    wardrobe = createWardrobe(
+      character,
+      journal,
+      () => {
+        // Existing toggle handling, if needed.
+      },
+      purchaseHat,
+    );
+  }
 
     wardrobe.toggle();
   }
+
 
   let currentShells = net.journal?.shells ?? 0;
   const shellCounter = div(

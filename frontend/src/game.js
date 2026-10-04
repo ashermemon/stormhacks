@@ -181,6 +181,11 @@ export async function startGame(view) {
     z: SPAWN.z,
     vy: 0,
     ry: 0,
+
+    hats: {
+      hat: false,
+      wizardHat: true,
+    },
   };
   const seating = createSeating([...scenery.benches, ...campfires.flatMap((c) => c.seats)], me);
   const cameraFocus = new THREE.Vector3(player.x, player.y, player.z);

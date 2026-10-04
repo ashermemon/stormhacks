@@ -60,6 +60,7 @@ export function connect(handlers) {
             players: msg.players,
             names: msg.names,
             trinkets: msg.trinkets,
+            hats: msg.hats,
             journal: msg.journal,
             trinketCatalog: msg.trinketCatalog,
             /** Subscribe to any server message type (chat, join, leave, renamed, error, ...). */
