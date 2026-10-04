@@ -25,6 +25,8 @@ const CAMERA_HEIGHT = 4;
 const ORBIT_SPEED = 2;
 const REMOTE_SMOOTHING = 15;
 const MOUSE_SENSITIVITY = 0.0025; // radians per pixel
+const CAMERA_PITCH_MIN = -0.75;
+const CAMERA_PITCH_MAX = 1.05;
 const CAMERA_GROUND_CLEARANCE = 0.5; // keep the camera out of the hills
 
 // Hash the id so each player gets a random-looking color that matches on every client.
@@ -141,12 +143,18 @@ export async function startGame() {
   });
 
   let cameraYaw = 0;
+  let cameraPitch = 0.25;
   // Mouse look: click the game to lock the cursor, then just move the mouse. Esc releases it.
   canvas.addEventListener("click", lockPointer);
   lockPointer(); // may work straight away thanks to the Play button click
   window.addEventListener("mousemove", (e) => {
-    if (document.pointerLockElement === canvas)
+    if (document.pointerLockElement === canvas) {
       cameraYaw -= e.movementX * MOUSE_SENSITIVITY;
+      cameraPitch = Math.max(
+        CAMERA_PITCH_MIN,
+        Math.min(CAMERA_PITCH_MAX, cameraPitch - e.movementY * MOUSE_SENSITIVITY),
+      );
+    }
   });
 
   let sendTimer = 0;
@@ -212,12 +220,13 @@ export async function startGame() {
     me.update(dt, aquatic.swimModeAt);
 
     // Third-person camera behind the player, looking at their head.
-    const camX = player.x + Math.sin(cameraYaw) * CAMERA_DISTANCE;
-    const camZ = player.z + Math.cos(cameraYaw) * CAMERA_DISTANCE;
+    const horizontalDistance = CAMERA_DISTANCE * Math.cos(cameraPitch);
+    const camX = player.x + Math.sin(cameraYaw) * horizontalDistance;
+    const camZ = player.z + Math.cos(cameraYaw) * horizontalDistance;
     camera.position.set(
       camX,
       Math.max(
-        player.y + CAMERA_HEIGHT,
+        player.y + CAMERA_HEIGHT + Math.sin(cameraPitch) * CAMERA_DISTANCE,
         getGroundHeight(camX, camZ) + CAMERA_GROUND_CLEARANCE,
       ),
       camZ,
