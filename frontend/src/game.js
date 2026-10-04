@@ -9,7 +9,7 @@ import { trackNames } from "./names.js";
 import { setToonLight, toonifyScene } from "./toonshading.js";
 
 const ARENA_HALF = 20;
-const AVATAR = { w: 1, h: 2, d: 0.6 };
+const AVATAR = { w: 1, h: 1, d: 1 };
 const SPEED = 5.5;
 const SEND_INTERVAL = 1 / 30;
 const CAMERA_DISTANCE = 8;
@@ -120,8 +120,24 @@ export async function startGame() {
   let sendTimer = 0;
   const clock = new THREE.Clock();
   const limit = ARENA_HALF - AVATAR.w / 2;
-  const isOverArenaFloor = () =>
-    Math.abs(player.x) <= ARENA_HALF && Math.abs(player.z) <= ARENA_HALF;
+  const isOverArenaFloor = () => {
+    const halfWidth = AVATAR.w / 2;
+    const halfDepth = AVATAR.d / 2;
+    const footprintPoints = [
+      [player.x, player.z],
+      [player.x - halfWidth, player.z - halfDepth],
+      [player.x - halfWidth, player.z + halfDepth],
+      [player.x + halfWidth, player.z - halfDepth],
+      [player.x + halfWidth, player.z + halfDepth],
+    ];
+
+    return footprintPoints.some(([x, z]) =>
+      x >= -ARENA_HALF &&
+      x <= ARENA_HALF &&
+      z >= -ARENA_HALF &&
+      z <= ARENA_HALF,
+    );
+  };
   let previousPlayerPosition = {
     x: player.x,
     y: player.y,
