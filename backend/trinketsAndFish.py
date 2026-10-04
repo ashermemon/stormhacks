@@ -95,6 +95,11 @@ class TrinketStore:
             self.db.execute(
                 "CREATE TABLE IF NOT EXISTS trinket_wallet (player_id TEXT PRIMARY KEY, shells INTEGER NOT NULL)"
             )
+            self.db.execute(
+                """CREATE TABLE IF NOT EXISTS player_hats (
+                    player_id TEXT NOT NULL, hat_id TEXT NOT NULL, bought_at REAL NOT NULL,
+                    PRIMARY KEY (player_id, hat_id))"""
+            )
 
     def record(self, pid, species, tier, item, shells):
         """Mark a crack in the journal. Returns (new_trinket_entry, new_item_entry)."""
@@ -204,8 +209,32 @@ class TrinketStore:
         )
 
         return row[0] if row else None
+        
+    def owns_hat(self, pid, hat_id):
+        if hat_id in ("none", "wizardHat"):
+            return True
+        row = self.db.execute(
+            "SELECT 1 FROM player_hats WHERE player_id = ? AND hat_id = ?",
+            (pid, hat_id),
+        ).fetchone()
+        return row is not None
 
+    def add_hat(self, pid, hat_id):
+        now = time.time()
+        with self.db:
+            self.db.execute(
+                """INSERT OR IGNORE INTO player_hats (player_id, hat_id, bought_at)
+                   VALUES (?, ?, ?)""",
+                (pid, hat_id, now),
+            )
 
+    def get_hats(self, pid):
+        hats = {"none": True, "wizardHat": True}
+        for (h,) in self.db.execute(
+            "SELECT hat_id FROM player_hats WHERE player_id = ?", (pid,)
+        ):
+            hats[h] = True
+        return hats
 
 
 class TrinketWorld:
