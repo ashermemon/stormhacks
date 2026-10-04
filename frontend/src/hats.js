@@ -1,6 +1,5 @@
 import hatUrl from "../assets/models/character/Hat.glb?url";
 import wizardHatUrl from "../assets/models/character/WizardHat.glb?url";
-
 const HATS = [
   {
     id: "none",
@@ -286,7 +285,7 @@ export function createWardrobe(
 
       if (document.pointerLockElement) {
         document.exitPointerLock();
-      }
+      } 
     }
 
     onToggle?.(open);
@@ -304,6 +303,9 @@ export function createWardrobe(
 
     close() {
       toggle(false);
+      const canvas = document.querySelector("canvas")[0];
+        const lockPointer = () => canvas.requestPointerLock()?.catch?.(() => {});
+lockPointer()
     },
 
     isOpen() {
