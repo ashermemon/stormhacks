@@ -1,15 +1,15 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import campfireUrl from "../assets/models/world/extras/Campfire.glb?url";
+import logBenchUrl from "../assets/models/world/extras/LogBench.glb?url";
 import { toonifyScene } from "./toonshading.js";
 
 // The campfire area: Campfire.glb (stones and a log pile) burning a soft particle fire
-// (`applyCampfire` below), with two log seats in a wide V on the far side of the fire
-// from the water, opening toward the fire, so you sit looking over the fire at the water. The logs are seats like the benches (seating.js): walk into one to sit.
+// (`applyCampfire` below) on a patch of sand, with three log benches in a horseshoe on
+// the far side of the fire from the water, so you sit looking over the fire at the water. The logs are seats like the benches (seating.js): walk into one to sit.
 //
-// The log seats are PLACEHOLDER geometry until their model arrives: replace buildLog(),
-// keeping each log's seat at SEAT_HEIGHT (the bench's) so the otter's Sit clips still
-// fit, or move SIT / STAND to the new model's markers.
+// The log benches (LogBench.glb) are built at the otter model's scale like the bench,
+// with two seats each marked by SitPoint_L / SitPoint_R and their StandPoints.
 //
 //   const campfire = await createCampfire(scene, world, scenery.campsite, { openToward: SPAWN });
 //   (openToward only matters if the site doesn't know where the water is.)
@@ -18,18 +18,14 @@ import { toonifyScene } from "./toonshading.js";
 
 const FIRE_SCALE = 2.4; // Campfire.glb is in metres; this sizes it for the otters
 const FIRE_RADIUS = 1.2; // what the otter can't walk into
-const SEAT_HEIGHT = 0.756; // the bench's SitPoint at the otter's scale (0.42 * 1.8)
-// Seat and stand spots on a log, in its own space: it faces +z, toward the fire.
-const SIT = new THREE.Vector3(0, SEAT_HEIGHT, 0.036);
-const STAND = new THREE.Vector3(0, 0, 1.116);
-const LOG_RING = 4.4; // log seats' distance from the fire
-// The two logs sit this far apart around the fire, so they meet at 180 - 60 = 120
-// degrees: a wide V opening toward the fire.
-const LOG_SPREAD = Math.PI / 3;
-const LOG_LENGTH = 4.8;
-// Thick logs settle into the ground: the top stays at SEAT_HEIGHT whatever the radius.
-const LOG_RADIUS = 0.72;
-const SEATS_ALONG = [-1.1, 1.1]; // two otters fit side by side on each log
+const LOG_SCALE = 1.8; // LogBench.glb is at the otter model's scale (character.js MODEL_SCALE)
+const LOG_SEATS = [["SitPoint_L", "StandPoint_L"], ["SitPoint_R", "StandPoint_R"]];
+const LOG_RING = 4.0; // log benches' distance from the fire
+// Three logs in a horseshoe around the fire, this far apart (65 degrees), so their
+// ends don't touch; the open side faces the water.
+const LOG_SPREAD = (65 * Math.PI) / 180;
+const SAND_RADIUS = 5.6; // sandy ground under the fire and the logs
+const SAND_COLOR = "#e1d09d"; // the terrain texture's shore sand
 
 // ---------------------------------------------------------------------------
 // The fire (provided shader code, unchanged below this line up to "The campfire area").
@@ -413,19 +409,48 @@ export function updateCampfires(elapsedSeconds) {
 // ---------------------------------------------------------------------------
 // The campfire area
 // ---------------------------------------------------------------------------
-const bark = new THREE.MeshStandardMaterial({ color: "#7a4a2a" });
-const cutWood = new THREE.MeshStandardMaterial({ color: "#d9a86c" });
+// Paints an irregular patch of shore sand into the terrain texture under the camp, so
+// the fire and logs sit on sand instead of grass. It's a cluster of overlapping,
+// stretched, soft blobs (shaped by the camp's position, so each camp's patch differs)
+// that fades out gradually into the grass.
+function paintSand(world, site) {
+  const texture = world.terrain.material.map;
+  const canvas = texture.image;
+  if (!canvas?.getContext) return; // the texture is a canvas once terrainTexture.js has softened it
+  const ctx = canvas.getContext("2d");
+  const span = world.mapHalf * 2;
+  const pxPerUnit = canvas.width / span;
+  const toPx = (x, z) => [((x + world.mapHalf) / span) * canvas.width, ((z + world.mapHalf) / span) * canvas.height];
+  let seed = Math.abs(Math.round(site.x * 73 + site.z * 151)) + 1;
+  const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 
-function buildLog() {
-  const log = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.CylinderGeometry(LOG_RADIUS, LOG_RADIUS * 1.05, LOG_LENGTH, 12),
-    [bark, cutWood, cutWood], // side, top, bottom: cut rings on the ends
-  );
-  body.rotation.z = Math.PI / 2; // lying along x
-  body.position.y = SEAT_HEIGHT - LOG_RADIUS; // its top is the seat
-  log.add(body);
-  return log;
+  // Color() stores linear values; the canvas wants sRGB.
+  const sand = new THREE.Color(SAND_COLOR).convertLinearToSRGB();
+  const rgba = (a) => `rgba(${Math.round(sand.r * 255)}, ${Math.round(sand.g * 255)}, ${Math.round(sand.b * 255)}, ${a})`;
+  const blobs = [[0, 0, 0.75, 1, 0]];
+  for (let i = 0; i < 9; i++) {
+    const angle = random() * Math.PI * 2;
+    const offset = 0.2 + random() * 0.3;
+    blobs.push([Math.cos(angle) * offset, Math.sin(angle) * offset, 0.4 + random() * 0.3, 0.6 + random() * 0.8, random() * Math.PI]);
+  }
+  for (const [ox, oz, size, stretch, turn] of blobs) {
+    const [cx, cy] = toPx(site.x + ox * SAND_RADIUS, site.z + oz * SAND_RADIUS);
+    const r = SAND_RADIUS * size * pxPerUnit;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(turn);
+    ctx.scale(stretch, 1 / stretch);
+    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+    gradient.addColorStop(0, rgba(0.8));
+    gradient.addColorStop(0.45, rgba(0.55));
+    gradient.addColorStop(1, rgba(0));
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  texture.needsUpdate = true;
 }
 
 export async function createCampfire(scene, world, site, { openToward }) {
@@ -442,13 +467,20 @@ export async function createCampfire(scene, world, site, { openToward }) {
   group.add(fire);
   world.addObstacle(site.x, site.z, FIRE_RADIUS);
 
-  // Two logs on the far side of the fire from the water.
+  const logModel = (await new GLTFLoader().loadAsync(logBenchUrl)).scene;
+  logModel.updateMatrixWorld(true);
+  const marker = (name) => logModel.getObjectByName(name).getWorldPosition(new THREE.Vector3());
+  const logLength = new THREE.Box3().setFromObject(logModel).getSize(new THREE.Vector3()).x * LOG_SCALE;
+
+  paintSand(world, site);
+
+  // Three logs on the far side of the fire from the water.
   const seats = [];
   const away = site.toWater
     ? Math.atan2(-site.toWater.z, -site.toWater.x)
     : Math.atan2(site.z - openToward.z, site.x - openToward.x);
-  for (const side of [-1, 1]) {
-    const angle = away + (side * LOG_SPREAD) / 2;
+  for (const step of [-1, 0, 1]) {
+    const angle = away + step * LOG_SPREAD;
     const x = site.x + Math.cos(angle) * LOG_RING;
     const z = site.z + Math.sin(angle) * LOG_RING;
     const rotY = Math.atan2(site.x - x, site.z - z); // +z toward the fire
@@ -456,25 +488,26 @@ export async function createCampfire(scene, world, site, { openToward }) {
     const along = new THREE.Vector3(Math.cos(rotY), 0, -Math.sin(rotY));
     const y = Math.min(
       ground(x, z),
-      ground(x + along.x * LOG_LENGTH * 0.45, z + along.z * LOG_LENGTH * 0.45),
-      ground(x - along.x * LOG_LENGTH * 0.45, z - along.z * LOG_LENGTH * 0.45),
+      ground(x + along.x * logLength * 0.45, z + along.z * logLength * 0.45),
+      ground(x - along.x * logLength * 0.45, z - along.z * logLength * 0.45),
     );
-    const log = buildLog();
+    const log = logModel.clone();
+    log.scale.setScalar(LOG_SCALE);
     log.position.set(x, y, z);
     log.rotation.y = rotY;
     group.add(log);
 
-    const toWorld = (local, offset) =>
+    const toWorld = (local) =>
       local
         .clone()
-        .setX(offset)
+        .multiplyScalar(LOG_SCALE)
         .applyAxisAngle(new THREE.Vector3(0, 1, 0), rotY)
         .add(log.position);
-    for (const offset of SEATS_ALONG) {
-      seats.push({ rotY, sit: toWorld(SIT, offset), stand: toWorld(STAND, offset) });
+    for (const [sit, stand] of LOG_SEATS) {
+      seats.push({ rotY, sit: toWorld(marker(sit)), stand: toWorld(marker(stand)) });
     }
-    for (const side of [-1.8, -0.6, 0.6, 1.8]) {
-      world.addObstacle(x + along.x * side, z + along.z * side, 0.75);
+    for (const side of [-0.38, -0.13, 0.13, 0.38]) {
+      world.addObstacle(x + along.x * side * logLength, z + along.z * side * logLength, 0.5);
     }
   }
 

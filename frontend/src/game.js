@@ -68,12 +68,15 @@ export async function loadScene() {
   // Grass, flowers, trees, rocks and seaweed; keeps the spawn meadow open.
   const scenery = await createScenery(scene, world, {
     clearings: [{ x: SPAWN.x, z: SPAWN.z, r: 5 }],
-    campNear: SPAWN,
+    camps: [
+      { near: SPAWN }, // a short walk from the spawn, looking out at the pond
+      { near: { x: -20, z: -12 }, ring: [0, 18], ideal: 0, faceStream: true }, // across the water
+    ],
   });
-  // A campfire with log seats, a short walk from the spawn.
-  const campfire = scenery.campsite
-    ? await createCampfire(scene, world, scenery.campsite, { openToward: SPAWN })
-    : null;
+  // Campfires with log seats around them.
+  const campfires = await Promise.all(
+    scenery.campsites.map((site) => createCampfire(scene, world, site, { openToward: SPAWN })),
+  );
 
   const camera = new THREE.PerspectiveCamera(
     70,
@@ -104,12 +107,12 @@ export async function loadScene() {
   // Cel-shade everything built so far (the water keeps its own shader); otters are styled in Character.
   toonifyScene(scene);
 
-  return { scene, environment, world, scenery, campfire, camera, renderer, aquatic, zones, fish };
+  return { scene, environment, world, scenery, campfires, camera, renderer, aquatic, zones, fish };
 }
 
 /** Connects and starts playing in a scene from loadScene(). */
 export async function startGame(view) {
-  const { scene, environment, world, scenery, campfire, camera, renderer, aquatic, zones, fish } = view;
+  const { scene, environment, world, scenery, campfires, camera, renderer, aquatic, zones, fish } = view;
   const { getGroundHeight } = world;
   const canvas = renderer.domElement;
   const lockPointer = () => canvas.requestPointerLock()?.catch?.(() => {});
@@ -184,7 +187,7 @@ export async function startGame(view) {
       wizardHat: true,
     },
   };
-  const seating = createSeating([...scenery.benches, ...(campfire?.seats ?? [])], me);
+  const seating = createSeating([...scenery.benches, ...campfires.flatMap((c) => c.seats)], me);
   const cameraFocus = new THREE.Vector3(player.x, player.y, player.z);
   let cameraGlide = 0;
   let lastPose = null;
@@ -364,7 +367,7 @@ export async function startGame(view) {
     camera.lookAt(cameraFocus.x, cameraFocus.y + AVATAR_HEIGHT, cameraFocus.z);
     scenery.update(camera);
     environment.update(camera, clock.elapsedTime);
-    campfire?.update(clock.elapsedTime);
+    for (const campfire of campfires) campfire.update(clock.elapsedTime);
     trinkets.update(dt, player, camera);
 
     // Network.
