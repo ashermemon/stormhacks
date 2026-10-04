@@ -14,7 +14,7 @@ const underwaterOverlay = document.createElement('div');
 
 underwaterOverlay.style.position = 'fixed';
 underwaterOverlay.style.inset = '0';
-underwaterOverlay.style.background = 'rgba(0, 100, 255, 0.35)';
+underwaterOverlay.style.background = 'rgba(0, 100, 255, 0.18)'; // underwater tint: alpha = strength
 underwaterOverlay.style.pointerEvents = 'none';
 underwaterOverlay.style.zIndex = '9999';
 underwaterOverlay.style.opacity = '0';
