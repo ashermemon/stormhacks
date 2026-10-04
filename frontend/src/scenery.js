@@ -553,7 +553,12 @@ function findCampsite(field, near) {
       }
     }
   }
-  return best && { ...best, y: ground(best.x, best.z) };
+  if (!best) return null;
+  // Which way the nearest water lies: where the distance to it falls fastest.
+  const gx = waterDist(best.x + 2, best.z) - waterDist(best.x - 2, best.z);
+  const gz = waterDist(best.x, best.z + 2) - waterDist(best.x, best.z - 2);
+  const length = Math.hypot(gx, gz) || 1;
+  return { ...best, y: ground(best.x, best.z), toWater: { x: -gx / length, z: -gz / length } };
 }
 function placeEverything(scatter, field, world, clearings) {
   const { ground, zone, slope, waterDist, wildDist, footing, inCave, meadowLight, mapHalf } = field;
