@@ -19,7 +19,7 @@ const BEAT_LEAD = 1.0; // seconds before the first beat
 const BEAT_INTERVAL = 0.6;
 const PERFECT_WINDOW = 0.08; // +- seconds around the beat
 const GOOD_WINDOW = 0.18;
-const FISH_HOLD_SECONDS = 2;
+const FISH_HOLD_SECONDS = 0.05;
 const MISS = 0, GOOD = 1, PERFECT = 2;
 const REVEAL_ROLL_TIME = 1.3; // slot-machine spin before the tier lands
 const REVEAL_HOLD_TIME = 3.0;
