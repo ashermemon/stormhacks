@@ -285,7 +285,12 @@ export function createWardrobe(
 
       if (document.pointerLockElement) {
         document.exitPointerLock();
-      } 
+      }
+    } else {
+      if (!document.body.classList.contains("has-mobile-controls")) {
+        const canvas = document.querySelector("canvas");
+        canvas?.requestPointerLock()?.catch?.(() => {});
+      }
     }
 
     onToggle?.(open);
@@ -298,14 +303,10 @@ export function createWardrobe(
 
     open() {
       toggle(true);
-      
     },
 
     close() {
       toggle(false);
-      const canvas = document.querySelector("canvas")[0];
-        const lockPointer = () => canvas.requestPointerLock()?.catch?.(() => {});
-lockPointer()
     },
 
     isOpen() {
