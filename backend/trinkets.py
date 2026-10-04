@@ -202,9 +202,9 @@ class TrinketWorld:
         self.cracking[pid] = {"tier": trinket["tier"], "beats": beats, "started": self.clock()}
         return {"beats": beats, "seed": trinket["seed"]}
 
-    def _roll_item(self, tier, perfect):
+    def _roll_item(self, tier, accuracy):
         tiers = list(TIERS)
-        chance = PERFECT_BUMP_CHANCE if perfect else BUMP_CHANCE
+        chance = BUMP_CHANCE + (PERFECT_BUMP_CHANCE - BUMP_CHANCE) * accuracy
         bumped = tier != TIERS[-1] and self.rng.random() < chance
         if bumped:
             tier = tiers[tiers.index(tier) + 1]
@@ -229,10 +229,10 @@ class TrinketWorld:
         del self.trinkets[trinket["id"]]
         replacement = self._spawn()
 
-        perfect = all(g == PERFECT for g in grades)
-        item, name, shells, item_tier, bumped = self._roll_item(trinket["tier"], perfect)
-        # Sloppy taps trim the payout; clean ones are never worse than base value.
         accuracy = sum(grades) / (2 * len(grades))
+        perfect = all(g == PERFECT for g in grades)
+        item, name, shells, item_tier, bumped = self._roll_item(trinket["tier"], accuracy)
+        # Sloppy taps trim the payout; clean ones are never worse than base value.
         shells = round(shells * (0.75 + 0.5 * accuracy))
         new_entry, new_item = self.store.record(
             pid, trinket["species"], trinket["tier"], item, shells
