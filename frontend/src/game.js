@@ -10,6 +10,7 @@ import { createChat } from "./chat.js";
 import { trackNames } from "./names.js";
 import { toonifyScene, updateWind } from "./toonshading.js";
 import { createScenery } from "./scenery.js";
+import { createSeating } from "./seating.js";
 import { createFish } from "./fish.js";
 import { createTrinkets } from "./trinkets/trinkets.js";
 import { collectSpawnZones } from "./trinkets/spawnZones.js";
@@ -32,6 +33,12 @@ const MOUSE_SENSITIVITY = 0.0025; // radians per pixel
 const CAMERA_PITCH_MIN = -0.75;
 const CAMERA_PITCH_MAX = 1.05;
 const CAMERA_GROUND_CLEARANCE = 0.5; // keep the camera out of the hills
+// The camera follows an eased point: almost exactly while moving, but gliding for a
+// moment after sitting down on or getting up from a bench, where the otter's position
+// jumps between the ground and the seat (seating.js).
+const CAMERA_FOLLOW = 40;
+const CAMERA_SEAT_FOLLOW = 5;
+const CAMERA_SEAT_GLIDE_TIME = 0.8; // seconds of gliding after each bench pose change
 
 // Hash the id so each player gets a random-looking color that matches on every client.
 function colorFor(id) {
@@ -106,6 +113,13 @@ export async function startGame() {
       remotes.set(id, remote);
     }
     remote.target = state;
+    // Sitting down or getting up moves the otter in one step (seating.js); don't glide.
+    const pose = state.pose ?? null;
+    if (pose !== remote.character.pose) {
+      remote.character.root.position.set(state.x, state.y, state.z);
+      remote.character.root.rotation.y = state.ry;
+      remote.character.setPose(pose);
+    }
   }
 
   const net = await connect({
@@ -137,6 +151,10 @@ export async function startGame() {
     vy: 0,
     ry: 0,
   };
+  const seating = createSeating(scenery.benches, me);
+  const cameraFocus = new THREE.Vector3(player.x, player.y, player.z);
+  let cameraGlide = 0;
+  let lastPose = null;
 
   const chat = createChat({ net, camera, getCharacter: characterOf });
 
@@ -227,43 +245,51 @@ export async function startGame() {
     // Cracking a trinket holds the otter still.
     const busy = trinkets.busy();
     const { forward, right } = busy ? { forward: 0, right: 0 } : keys.axes();
-    const fx = -Math.sin(cameraYaw);
-    const fz = -Math.cos(cameraYaw);
-    const rx = Math.cos(cameraYaw);
-    const rz = -Math.sin(cameraYaw);
-    let dx = fx * forward + rx * right;
-    let dz = fz * forward + rz * right;
-    const len = Math.hypot(dx, dz);
-    if (len > 0) {
-      dx /= len;
-      dz /= len;
-      const swimState = aquatic.swimState();
-      const speed =
-        swimState === "surface"
-          ? me.isFloating()
-            ? FLOAT_SWIM_SPEED
-            : SURFACE_SWIM_SPEED
-          : swimState === "under"
-            ? UNDERWATER_SWIM_SPEED
-            : SPEED;
-      world.resolveHorizontalMovement(player, dx * speed * dt, dz * speed * dt);
-      player.ry = lerpAngle(
-        player.ry,
-        Math.atan2(dx, dz),
-        1 - Math.exp(-15 * dt),
+    // Benches: walking into one sits you down; a direction or jump gets you up.
+    const seated = seating.update(player, {
+      moving: forward !== 0 || right !== 0,
+      jump: !busy && keys.jump(),
+      onLand: aquatic.swimState() === null,
+    });
+    if (!seated) {
+      const fx = -Math.sin(cameraYaw);
+      const fz = -Math.cos(cameraYaw);
+      const rx = Math.cos(cameraYaw);
+      const rz = -Math.sin(cameraYaw);
+      let dx = fx * forward + rx * right;
+      let dz = fz * forward + rz * right;
+      const len = Math.hypot(dx, dz);
+      if (len > 0) {
+        dx /= len;
+        dz /= len;
+        const swimState = aquatic.swimState();
+        const speed =
+          swimState === "surface"
+            ? me.isFloating()
+              ? FLOAT_SWIM_SPEED
+              : SURFACE_SWIM_SPEED
+            : swimState === "under"
+              ? UNDERWATER_SWIM_SPEED
+              : SPEED;
+        world.resolveHorizontalMovement(player, dx * speed * dt, dz * speed * dt);
+        player.ry = lerpAngle(
+          player.ry,
+          Math.atan2(dx, dz),
+          1 - Math.exp(-15 * dt),
+        );
+      }
+      aquatic.stepPhysics(
+        player,
+        {
+          jumpDown: !busy && keys.jump(),
+          dive: !busy && keys.dive(),
+          rise: !busy && keys.rise(),
+        },
+        dt,
       );
+      // Cave walls: checked on the whole frame's move (walking, diving, rising, drifting).
+      world.resolveColliders(frameStart, player);
     }
-    aquatic.stepPhysics(
-      player,
-      {
-        jumpDown: !busy && keys.jump(),
-        dive: !busy && keys.dive(),
-        rise: !busy && keys.rise(),
-      },
-      dt,
-    );
-    // Cave walls: checked on the whole frame's move (walking, diving, rising, drifting).
-    world.resolveColliders(frameStart, player);
 
     me.root.position.set(player.x, player.y, player.z);
     me.root.rotation.y = player.ry;
@@ -281,18 +307,28 @@ export async function startGame() {
     }
 
     // Third-person camera behind the player, looking at their head.
+    const pose = seating.pose();
+    if (pose !== lastPose) {
+      cameraGlide = CAMERA_SEAT_GLIDE_TIME;
+      lastPose = pose;
+    }
+    cameraGlide = Math.max(0, cameraGlide - dt);
+    const follow = 1 - Math.exp(-(cameraGlide > 0 ? CAMERA_SEAT_FOLLOW : CAMERA_FOLLOW) * dt);
+    cameraFocus.x += (player.x - cameraFocus.x) * follow;
+    cameraFocus.y += (player.y - cameraFocus.y) * follow;
+    cameraFocus.z += (player.z - cameraFocus.z) * follow;
     const horizontalDistance = cameraDistance * Math.cos(cameraPitch);
-    const camX = player.x + Math.sin(cameraYaw) * horizontalDistance;
-    const camZ = player.z + Math.cos(cameraYaw) * horizontalDistance;
+    const camX = cameraFocus.x + Math.sin(cameraYaw) * horizontalDistance;
+    const camZ = cameraFocus.z + Math.cos(cameraYaw) * horizontalDistance;
     camera.position.set(
       camX,
       Math.max(
-        player.y + CAMERA_HEIGHT + Math.sin(cameraPitch) * cameraDistance,
+        cameraFocus.y + CAMERA_HEIGHT + Math.sin(cameraPitch) * cameraDistance,
         getGroundHeight(camX, camZ) + CAMERA_GROUND_CLEARANCE,
       ),
       camZ,
     );
-    camera.lookAt(player.x, player.y + AVATAR_HEIGHT, player.z);
+    camera.lookAt(cameraFocus.x, cameraFocus.y + AVATAR_HEIGHT, cameraFocus.z);
     scenery.update(camera);
     environment.update(camera, clock.elapsedTime);
     trinkets.update(dt, player, camera);
@@ -312,7 +348,7 @@ export async function startGame() {
     }
     if (sendTimer >= SEND_INTERVAL) {
       sendTimer = 0;
-      net.sendState({ x: player.x, y: player.y, z: player.z, ry: player.ry });
+      net.sendState({ x: player.x, y: player.y, z: player.z, ry: player.ry, pose: seating.pose() });
     }
 
     renderer.render(scene, camera);

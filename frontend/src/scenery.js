@@ -15,13 +15,19 @@ import { seededRandom } from "./trinkets/spawnZones.js";
 // update(camera) thins out the small stuff with distance, and each instance dissolves
 // in and out over a short range (toonshading.js distanceFade) instead of popping.
 
-const MODEL_URLS = urlsByName(
-  import.meta.glob("../assets/models/world/environment/*.gltf", {
+const MODEL_URLS = urlsByName({
+  ...import.meta.glob("../assets/models/world/environment/*.gltf", {
     query: "?url",
     import: "default",
     eager: true,
   }),
-);
+  // Self-contained .glb props made for this map.
+  ...import.meta.glob("../assets/models/world/extras/*.glb", {
+    query: "?url",
+    import: "default",
+    eager: true,
+  }),
+});
 // The .gltf files point at these by bare file name. Normal maps aren't used by the
 // toon shader, so they're left out of the build and never downloaded.
 const RESOURCE_URLS = urlsByName(
@@ -37,6 +43,9 @@ const SEED = 20261003;
 const MOBILE = window.matchMedia("(pointer: coarse)").matches;
 const LOD_RANGE = MOBILE ? 0.6 : 1; // phones draw the small stuff over a shorter range
 const MAX_WALK_HEIGHT = 4.5; // obstacles only matter where the otter can walk
+const BENCH_SCALE = 1.8; // built at the otter model's scale (character.js MODEL_SCALE)
+const BENCH_COUNT = 4;
+const BENCH_SPACING = 45; // at least this far apart, so the few there are spread out
 const VIEW_LIMIT = 170; // past the fog (environment.js), nothing needs drawing
 const FADE_BAND = 0.2; // each instance dissolves over the last 20% of its draw distance...
 const MIN_FADE_BAND = 2; // ...but over at least this many units
@@ -58,6 +67,7 @@ const KINDS = {
   tree3: { model: "CommonTree_3", outline: true, cell: 32 },
   pine: { model: "Pine_1", outline: true, cell: 32 },
   twistedTree: { model: "TwistedTree_2", outline: true, cell: 32 },
+  bench: { model: "Bench", outline: true, cell: 32 },
   rock: { model: "Rock_Medium_2", outline: true, cell: 32 },
   pebble1: { model: "Pebble_Round_1", outline: true, cell: 16, near: 18, far: 45, minFrac: 0.3 },
   pebble2: { model: "Pebble_Round_2", outline: true, cell: 16, near: 18, far: 45, minFrac: 0.3 },
@@ -104,8 +114,25 @@ export async function createScenery(scene, world, { clearings = [] } = {}) {
   placeEverything(scatter, field, world, clearings);
   const chunks = scatter.build(scene);
 
+  // Benches, for sitting on (seating.js): heading plus the seat and stand spots in world space.
+  const benchMarkers = models.Bench?.markers ?? {};
+  const toWorld = (p, local) =>
+    local
+      .clone()
+      .multiply(new THREE.Vector3(...p.scale))
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), p.rotY)
+      .add(new THREE.Vector3(p.x, p.y, p.z));
+  const benches = benchMarkers.SitPoint && benchMarkers.StandPoint
+    ? (scatter.items.get("bench") ?? []).map((p) => ({
+        rotY: p.rotY,
+        sit: toWorld(p, benchMarkers.SitPoint),
+        stand: toWorld(p, benchMarkers.StandPoint),
+      }))
+    : [];
+
   const cam = new THREE.Vector3();
   return {
+    benches,
     update(camera) {
       camera.getWorldPosition(cam);
       for (const chunk of chunks) {
@@ -152,7 +179,9 @@ async function loadModels() {
       const gltf = await loader.loadAsync(url);
       gltf.scene.updateMatrixWorld(true);
       const parts = [];
+      const markers = {}; // empty nodes like the bench's SitPoint / StandPoint, model space
       gltf.scene.traverse((o) => {
+        if (/Point$/.test(o.name) && !o.isMesh) markers[o.name] = o.getWorldPosition(new THREE.Vector3());
         if (!o.isMesh) return;
         let material = o.material;
         if (!materials.has(material.name)) materials.set(material.name, material);
@@ -160,7 +189,7 @@ async function loadModels() {
         const geometry = o.geometry.clone().applyMatrix4(o.matrixWorld);
         parts.push({ geometry, material });
       });
-      models[file.replace(".gltf", "")] = { parts };
+      models[file.replace(/\.(gltf|glb)$/, "")] = { parts, markers };
     }),
   );
 
@@ -493,8 +522,11 @@ function placeEverything(scatter, field, world, clearings) {
     base.clone().offsetHSL(range(-0.01, 0.01), 0, range(-jitter, jitter));
   const meadowColor = (x, z) => GRASS_DARK.clone().lerp(GRASS_LIGHT, meadowLight(x, z));
 
+  // Everything solid placed so far, so later props (benches) can keep clear of it.
+  const solids = [];
   // Only where the otter walks or wades: a rock on the bed mustn't stop a swimmer above it.
   const obstacle = (x, z, r) => {
+    solids.push({ x, z, r });
     const y = ground(x, z);
     if (y > WATER_SURFACE_Y - 0.4 && y < MAX_WALK_HEIGHT) world.addObstacle(x, z, r);
   };
@@ -567,6 +599,7 @@ function placeEverything(scatter, field, world, clearings) {
     if (random() > chance) return;
     const s = range(1.0, 1.7);
     scatter.add("bush", x, footing(x, z, 0.6 * s) - 0.05, z, { scale: s, tilt: 0.06, leafColor: leafGreen(range) });
+    solids.push({ x, z, r: 0.8 * s });
   });
 
   // Two great twisted trees as landmarks, a short way back from the water.
@@ -707,6 +740,34 @@ function placeEverything(scatter, field, world, clearings) {
     const s = range(0.6, 1.6);
     rock(x, footing(x, z, s), z, s, 0.3);
   });
+
+  // --- Benches: a short way back from the banks, each looking out over the water. ---
+  const spots = [];
+  grid(3, (x, z) => {
+    if (!onDryGrass(x, z) || slope(x, z) > 0.25 || cleared(x, z, 2)) return;
+    const w = waterDist(x, z);
+    if (w >= 3.5 && w <= 6) spots.push({ x, z, order: random() });
+  });
+  spots.sort((a, b) => a.order - b.order);
+  const benches = [];
+  for (const { x, z } of spots) {
+    if (benches.length >= BENCH_COUNT) break;
+    if (benches.some((b) => Math.hypot(b.x - x, b.z - z) < BENCH_SPACING)) continue;
+    if (solids.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + 2.5)) continue;
+    // Face the way the distance to the water falls fastest. The model faces +z
+    // (backrest at -z), and turning by rotY points +z at (sin, cos).
+    const gx = waterDist(x + 1.5, z) - waterDist(x - 1.5, z);
+    const gz = waterDist(x, z + 1.5) - waterDist(x, z - 1.5);
+    if (Math.hypot(gx, gz) < 1e-3) continue;
+    const rotY = Math.atan2(-gx, -gz);
+    scatter.add("bench", x, footing(x, z, 1.5) - 0.03, z, { scale: BENCH_SCALE, rotY });
+    // Two collision circles along its length (its local x axis).
+    const ax = Math.cos(rotY);
+    const az = -Math.sin(rotY);
+    for (const along of [-0.55, 0.55]) obstacle(x + ax * along * BENCH_SCALE, z + az * along * BENCH_SCALE, 0.5);
+    scatter.clearAround(x, z, 1.8, ["meadowGrass", "tallGrass", "shortGrass", "flowers3", "flowers4"]);
+    benches.push({ x, z });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -737,14 +798,16 @@ class Scatter {
     this.items = new Map(); // kind name -> [placement]
   }
 
-  add(kind, x, y, z, { scale = 1, tilt = 0, color = null, leafColor = null } = {}) {
+  // rotY: a fixed heading; random if left out.
+  add(kind, x, y, z, { scale = 1, tilt = 0, color = null, leafColor = null, rotY = null } = {}) {
     const r = this.random;
     if (!this.items.has(kind)) this.items.set(kind, []);
+    const randomYaw = r() * Math.PI * 2;
     this.items.get(kind).push({
       x,
       y,
       z,
-      rotY: r() * Math.PI * 2,
+      rotY: rotY ?? randomYaw,
       tiltX: (r() * 2 - 1) * tilt,
       tiltZ: (r() * 2 - 1) * tilt,
       scale: Array.isArray(scale) ? scale : [scale, scale, scale],
@@ -752,6 +815,14 @@ class Scatter {
       leafColor,
       order: r(), // instances draw in this order, so a partial count is an even thinning
     });
+  }
+
+  /** Drop the given kinds within r of (x, z), e.g. grass that would poke through a bench. */
+  clearAround(x, z, r, kinds) {
+    for (const kind of kinds) {
+      const list = this.items.get(kind);
+      if (list) this.items.set(kind, list.filter((p) => Math.hypot(p.x - x, p.z - z) >= r));
+    }
   }
 
   build(scene) {

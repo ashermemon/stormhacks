@@ -36,6 +36,8 @@ const CLIP_FOR_MODE = {
 // Holding a trinket in the water: these clips have a "<name>_Hold" twin where he hugs
 // it to his chest. Swapping between twins keeps the clip time, so only the arms move.
 const HOLD_SWAP_FADE = 0.25;
+// Bench poses (SitDown, Sit, StandUp) hand off to each other exactly, so barely blend.
+const POSE_FADE = 0.05;
 
 const TEXTURE_URLS = Object.fromEntries(
   Object.entries(
@@ -81,6 +83,7 @@ export class Character {
     this.speed = 0;
     this.vy = 0;
     this.holding = false;
+    this.pose = null; // a clip that overrides the movement-picked one (bench sitting)
     this.currentName = null; // the move being played, without any _Hold suffix
 
     this.root = new THREE.Group();
@@ -149,7 +152,7 @@ export class Character {
         this.actions[name] = this.mixer.clipAction(floatClip);
         this.actions[name].setLoop(THREE.LoopPingPong);
       }
-      for (const once of ["Surface", "Surface_Hold", "JumpStart", "JumpLand"]) {
+      for (const once of ["Surface", "Surface_Hold", "JumpStart", "JumpLand", "SitDown", "StandUp"]) {
         this.actions[once]?.setLoop(THREE.LoopOnce);
         if (this.actions[once]) this.actions[once].clampWhenFinished = true;
       }
@@ -181,6 +184,29 @@ export class Character {
    *  land clips have no twins, so on land he walks as usual). */
   setHolding(holding) {
     this.holding = holding;
+  }
+
+  /** Play this clip instead of picking one from movement ("SitDown", "Sit", "StandUp"),
+   *  or null to go back. Call it on the frame the root is moved to the pose's spot. */
+  setPose(name) {
+    if (name === this.pose) return;
+    this.pose = name;
+    this.lastX = undefined; // the root jumps here; don't read that as movement
+    this.speed = 0;
+    this.vy = 0;
+  }
+
+  /** 0..1 through the current pose clip (0 before it has started). */
+  poseProgress() {
+    const action = this.actions[this.pose];
+    if (!action || this.current !== action) return 0;
+    return Math.min(1, action.time / action.getClip().duration);
+  }
+
+  /** True once a play-once pose (SitDown, StandUp) has finished. */
+  poseDone() {
+    const action = this.actions[this.pose];
+    return Boolean(action && this.current === action && !action.isRunning());
   }
 
   /** True while a _Hold clip is playing, i.e. the trinket belongs in the chest socket. */
@@ -219,6 +245,12 @@ export class Character {
     this.lastX = x;
     this.lastY = y;
     this.lastZ = z;
+
+    if (this.pose && this.actions[this.pose]) {
+      this.play(this.pose, POSE_FADE);
+      this.mixer?.update(delta);
+      return;
+    }
 
     const mode = getSwimMode?.(this.root.position, this.vy) ?? "land";
     const onLand = mode === "land" || mode === "air";
