@@ -88,6 +88,18 @@ export function createEnvironment(scene, arenaHalf) {
 
   addGround(scene, arenaHalf);
 
+  const channelHalf = WATER_WIDTH / 2;
+  const riverBankHeight = GROUND_TOP - WATER_BOTTOM;
+  const riverBankMaterial = new THREE.MeshBasicMaterial({ visible: false });
+  for (const x of [-channelHalf, channelHalf]) {
+    const riverBank = new THREE.Mesh(
+      new THREE.BoxGeometry(0.2, riverBankHeight, arenaHalf * 2),
+      riverBankMaterial,
+    );
+    riverBank.position.set(x, GROUND_TOP - riverBankHeight / 2, 0);
+    collisionObjects.push(riverBank);
+  }
+
   for (const [x, z, scale] of [
     [-17, -15, 1.2],
     [-12, 16, 0.9],
@@ -132,19 +144,22 @@ export function createEnvironment(scene, arenaHalf) {
   }
 
   const collisionBoxes = collisionObjects.map((object) =>
-    shrinkCollisionBox(new THREE.Box3().setFromObject(object), 0.7),
+    shrinkCollisionBox(
+      new THREE.Box3().setFromObject(object),
+      object.material?.visible === false ? 1 : 0.7,
+    ),
   );
 
-  function resolveHorizontalMovement(player, deltaX, deltaZ, radius) {
+  function resolveHorizontalMovement(player, deltaX, deltaZ, radius, height) {
     let nextX = player.x + deltaX;
     let nextZ = player.z;
 
-    if (collisionBoxes.some((box) => overlaps(box, nextX, nextZ, radius))) {
+    if (collisionBoxes.some((box) => overlaps(box, nextX, nextZ, radius, player.y, height))) {
       nextX = player.x;
     }
 
     nextZ = player.z + deltaZ;
-    if (collisionBoxes.some((box) => overlaps(box, nextX, nextZ, radius))) {
+    if (collisionBoxes.some((box) => overlaps(box, nextX, nextZ, radius, player.y, height))) {
       nextZ = player.z;
     }
 
@@ -155,7 +170,11 @@ export function createEnvironment(scene, arenaHalf) {
   return { resolveHorizontalMovement };
 }
 
-function overlaps(box, x, z, radius) {
+function overlaps(box, x, z, radius, playerY, playerHeight) {
+  if (playerY + playerHeight <= box.min.y || playerY >= box.max.y) {
+    return false;
+  }
+
   return (
     x + radius > box.min.x &&
     x - radius < box.max.x &&

@@ -150,6 +150,7 @@ export async function startGame() {
         dx * SPEED * dt,
         dz * SPEED * dt,
         AVATAR.w / 2,
+        AVATAR.h,
       );
       player.ry = lerpAngle(
         player.ry,
