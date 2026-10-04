@@ -395,11 +395,7 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
     if (crack) text = "";
     else if (held && swimState() === "surface") text = "<b>F</b> crack it open!";
     else if (held) text = "Surface to the waterline to crack it open! <b>Shift</b> ⬆";
-    else if (near) {
-      text = near.species === "fish"
-        ? "<b>Hold F</b> for 2 seconds to collect the fish"
-        : `<b>F</b> grab the ${near.species}`;
-    }
+    else if (near) text = `<b>F</b> grab the ${near.species}`;
     if (prompt.innerHTML !== text) prompt.innerHTML = text;
     prompt.className = text ? "show" : "";
   }
