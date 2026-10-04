@@ -151,6 +151,8 @@ export function createEnvironment(scene, arenaHalf) {
   );
 
   function resolveHorizontalMovement(player, deltaX, deltaZ, radius, height) {
+    moveOutsideCollision(player, collisionBoxes, radius, height);
+
     let nextX = player.x + deltaX;
     let nextZ = player.z;
 
@@ -168,6 +170,30 @@ export function createEnvironment(scene, arenaHalf) {
   }
 
   return { resolveHorizontalMovement };
+}
+
+function moveOutsideCollision(player, collisionBoxes, radius, height) {
+  for (let attempt = 0; attempt < collisionBoxes.length; attempt += 1) {
+    const box = collisionBoxes.find((candidate) =>
+      overlaps(candidate, player.x, player.z, radius, player.y, height),
+    );
+    if (!box) return;
+
+    const left = player.x + radius - box.min.x;
+    const right = box.max.x - (player.x - radius);
+    const back = player.z + radius - box.min.z;
+    const front = box.max.z - (player.z - radius);
+    const smallest = Math.min(left, right, back, front);
+    const padding = 0.5;
+    const paddingY = 1;
+
+    if (smallest === left) player.x = box.min.x - radius - padding;
+    else if (smallest === right) player.x = box.max.x + radius + padding;
+    else if (smallest === back) player.z = box.min.z - radius - padding;
+    else player.z = box.max.z + radius + padding;
+
+    player.y += paddingY;
+  }
 }
 
 function overlaps(box, x, z, radius, playerY, playerHeight) {
