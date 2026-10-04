@@ -263,10 +263,15 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   net.on("trinket_spawn", ({ trinket }) => addTrinket(trinket, true));
 
   net.on("trinket_crack_begin", ({ beats }) => {
-    crack = { beats, grades: [], t: 0 };
+    // ignoreEarly: the first pre-window tap is discarded (often the same F that
+    // started the crack); later early taps still count as misses.
+    crack = { beats, grades: [], t: 0, ignoreEarly: true };
     pips.innerHTML = "<span></span>".repeat(beats);
     rhythm.className = "show";
   });
+
+  // Server rejected / aborted a crack (e.g. finish arrived too fast).
+  net.on("trinket_crack_abort", () => endCrack());
 
   net.on("trinket_cracked", ({ result, journal: nextJournal }) => {
     endCrack();
@@ -288,14 +293,29 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   }
 
   function tap() {
-    const target = beatTime(crack.grades.length);
+    if (!crack?.beats) return;
+    const i = crack.grades.length;
+    if (i >= crack.beats) return;
+    const target = beatTime(i);
+    const earlyBy = target - crack.t;
+    if (earlyBy > GOOD_WINDOW) {
+      if (crack.ignoreEarly) {
+        crack.ignoreEarly = false;
+        return;
+      }
+      grade(MISS);
+      return;
+    }
+    crack.ignoreEarly = false;
     const off = Math.abs(crack.t - target);
     grade(off <= PERFECT_WINDOW ? PERFECT : off <= GOOD_WINDOW ? GOOD : MISS);
   }
 
   function grade(g) {
+    if (!crack?.beats || crack.grades.length >= crack.beats) return;
+    const pip = pips.children[crack.grades.length];
     crack.grades.push(g);
-    pips.children[crack.grades.length - 1].className = ["miss", "good", "perfect"][g];
+    if (pip) pip.className = ["miss", "good", "perfect"][g];
     flash(gradeText, ["MISS", "GOOD", "PERFECT!"][g], ["miss", "good", "perfect"][g]);
     const t = myTrinket();
     if (t && g !== MISS) {
@@ -305,7 +325,7 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
     }
     if (crack.grades.length === crack.beats) {
       net.send({ type: "trinket_crack_end", grades: crack.grades });
-      crack = { waiting: true };
+      crack = { waiting: true, waitT: 0 };
       rhythm.className = "";
     }
   }
@@ -419,7 +439,9 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
     if (e.target instanceof HTMLInputElement || e.repeat) return;
     if (e.code === "KeyJ") journal.toggle();
     if (e.code === "Escape" && crack) {
-      if (crack.beats || crack.pending) net.send({ type: "trinket_crack_cancel" });
+      if (crack.beats || crack.pending || crack.waiting || crack.turning) {
+        if (!crack.turning) net.send({ type: "trinket_crack_cancel" });
+      }
       endCrack();
     }
     if (e.code === "KeyF") pressAction();
@@ -466,8 +488,16 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
         if (character) character.root.rotation.y = player.ry;
         if (Math.abs(angleDiff(player.ry, faceYaw)) < CRACK_TURN_DONE) {
           crack = { pending: true };
-          
-         setTimeout(() => net.send({ type: "trinket_crack_begin" }), 200);
+          net.send({ type: "trinket_crack_begin" });
+        }
+      }
+
+      // If the server never answers a finished crack, unlock the player.
+      if (crack?.waiting) {
+        crack.waitT = (crack.waitT ?? 0) + dt;
+        if (crack.waitT > 5) {
+          net.send({ type: "trinket_crack_cancel" });
+          endCrack();
         }
       }
 

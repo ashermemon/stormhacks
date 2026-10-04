@@ -204,6 +204,8 @@ async def handler(ws):
             elif kind == "trinket_crack_end":
                 outcome = world.finish_crack(pid, msg.get("grades"))
                 if outcome is None:
+                    world.cancel_crack(pid)
+                    await send(ws, {"type": "trinket_crack_abort"})
                     continue
                 result, replacement = outcome
                 await send(ws, {"type": "trinket_cracked", "result": result, "journal": trinket_store.journal(pid)})

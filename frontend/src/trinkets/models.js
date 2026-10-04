@@ -163,6 +163,9 @@ export function buildLoot(itemId, tier) {
   let geometry;
   if (itemId.includes("pearl")) geometry = new THREE.SphereGeometry(0.22, 16, 12);
   else if (itemId.includes("coin") || itemId.includes("button")) geometry = new THREE.CylinderGeometry(0.22, 0.22, 0.05, 16).rotateX(Math.PI / 2);
+  else if (itemId.includes("fish") || itemId === "goldfish" || itemId === "coelacanth") geometry = new THREE.ConeGeometry(0.16, 0.38, 5).rotateZ(-Math.PI / 2);
+  else if (itemId.includes("clam")) geometry = new THREE.SphereGeometry(0.22, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+  else if (itemId.includes("crab")) geometry = new THREE.BoxGeometry(0.28, 0.16, 0.22);
   else if (itemId === "gritty_sand") geometry = new THREE.DodecahedronGeometry(0.1, 0);
   else geometry = new THREE.DodecahedronGeometry(0.2, 0);
   const key = `loot:${tier}`;

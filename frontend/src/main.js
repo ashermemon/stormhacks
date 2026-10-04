@@ -7,7 +7,18 @@ const usernameInput = document.getElementById("username");
 const status = document.getElementById("status");
 
 usernameInput.value = identity.getName();
+function launchFullScreen(element) {
+  if(element.requestFullScreen) {
+    element.requestFullScreen();
+  } else if(element.mozRequestFullScreen) {
+    element.mozRequestFullScreen();
+  } else if(element.webkitRequestFullScreen) {
+    element.webkitRequestFullScreen();
+  }
+}
 
+// Launch fullscreen for browsers that support it!
+launchFullScreen(document.documentElement);
 usernameInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") playBtn.click();
 });

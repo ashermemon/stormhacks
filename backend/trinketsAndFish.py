@@ -19,8 +19,8 @@ DB_PATH = Path(os.environ.get("STORMHACKS_DB", Path(__file__).resolve().parent /
 
 SPECIES = ("clam", "crab", "urchin", "snail", "fish")
 TIERS = ("common", "uncommon", "rare", "legendary")
-SPAWN_WEIGHTS = (60, 28, 10, 2)  # per tier, same order as TIERS
-BEATS = (4, 6)  # taps per crack, rolled per crack so the count never hints at the tier
+SPAWN_WEIGHTS = (50, 28, 10, 5)  # per tier, same order as TIERS
+BEATS = 7  # taps per crack
 TARGET_COUNT = 40  # trinkets lying on the seabed or in paws at any time
 FISH_COUNT = 12  # dedicated collectible fish in addition to the regular trinket pool
 
@@ -38,21 +38,33 @@ LOOT = {
         ("barnacle_button", "Barnacle Button", 3, 30),
         ("pebble", "Lucky Pebble", 4, 20),
         ("gritty_sand", "Gritty Sand", 0, 10),  # the dud
+        ("goldfish", "Goldfish", 3, 30),
+        ("soft_shell_clam", "Soft-Shell Clam", 3, 30),
+        ("hermit_crab", "Hermit Crab", 4, 25),
     ],
     "uncommon": [
         ("seed_pearl", "Seed Pearl", 8, 40),
         ("mother_of_pearl", "Mother-of-Pearl", 10, 35),
         ("agate", "Polished Agate", 12, 25),
+        ("clownfish", "Clownfish", 10, 30),
+        ("razor_clam", "Razor Clam", 10, 30),
+        ("blue_crab", "Blue Crab", 12, 25),
     ],
     "rare": [
         ("pink_pearl", "Pink Pearl", 30, 40),
         ("sunstone", "Sunstone", 40, 35),
         ("old_coin", "Old Coin", 50, 25),
+        ("lionfish", "Lionfish", 40, 30),
+        ("giant_clam", "Giant Clam", 45, 30),
+        ("king_crab", "King Crab", 50, 25),
     ],
     "legendary": [
         ("black_pearl", "Black Pearl", 150, 45),
         ("golden_pearl", "Golden Pearl", 200, 40),
         ("moon_pearl", "Moon Pearl", 400, 15),
+        ("coelacanth", "Ancient Coelacanth", 300, 25),
+        ("golden_clam", "Golden Clam", 250, 30),
+        ("ghost_crab", "Ghost Yeti Crab", 200, 35),
     ],
 }
 ITEM_INFO = {
@@ -202,7 +214,7 @@ class TrinketWorld:
         trinket = self.held_by(pid)
         if trinket is None:
             return None
-        beats = self.rng.randint(*BEATS)
+        beats = BEATS if isinstance(BEATS, int) else self.rng.randint(*BEATS)
         self.cracking[pid] = {"tier": trinket["tier"], "beats": beats, "started": self.clock()}
         return {"beats": beats, "seed": trinket["seed"]}
 
