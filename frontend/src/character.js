@@ -4,7 +4,7 @@ import * as SkeletonUtils from "three/examples/jsm/utils/SkeletonUtils.js";
 import otterUrl from "../assets/models/character/Otter.glb?url";
 import { createNametag, disposeNametag } from "./nametags.js";
 import { applyToonStyle } from "./toonshading.js";
-import hatUrl from "../assets/models/character/Hat.glb?url";
+import hatUrl from "../assets/models/character/Beanie.glb?url";
 import wizardHatUrl from "../assets/models/character/WizardHat.glb?url";
 
 const NAMETAG_GAP = 0.4;
@@ -362,6 +362,7 @@ export class Character {
 
     this.hatId = "none";
   }
+  
 
   async setHat(hatFile, hatId = null) {
     if (!hatFile) {
@@ -403,6 +404,20 @@ export class Character {
       hatGltf.scene.clone(true);
 
     hat.name = "Hat";
+
+    if (hatId === "hat") {
+        hat.scale.set(
+        0.40, // width
+        0.2, // height
+        0.40  // depth
+      );
+      
+      hat.position.set(
+        0,
+        0.14,
+        0,
+      );
+    }
 
     if (socket) {
       // Rest the hat's base on the socket. Some hats are modelled floating above

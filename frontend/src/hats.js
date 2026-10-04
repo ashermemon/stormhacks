@@ -1,6 +1,7 @@
-import hatUrl from "../assets/models/character/Hat.glb?url";
+import hatUrl from "../assets/models/character/Beanie.glb?url";
 import { PIXEL_SHELL_SVG } from "./trinkets/pixelShell.js";
 import wizardHatUrl from "../assets/models/character/WizardHat.glb?url";
+import beanie from "../assets/models/character/beanie.jpg?url";
 const HATS = [
   {
     id: "none",
@@ -11,9 +12,9 @@ const HATS = [
   },
   {
     id: "hat",
-    name: "Hat",
+    name: "Beanie",
     file: hatUrl,
-    preview: "🎩",
+    preview: beanie,
     price: 100,
   },
   {
@@ -24,6 +25,42 @@ const HATS = [
     price: 250,
   },
 ];
+
+function renderPreview(preview) {
+  if (!preview) {
+    return "";
+  }
+
+  // Image preview
+  if (
+    typeof preview === "string" &&
+    (
+      preview.startsWith("/") ||
+      preview.startsWith("./") ||
+      preview.startsWith("../") ||
+      preview.startsWith("http://") ||
+      preview.startsWith("https://") ||
+      preview.startsWith("data:image/")
+    )
+  ) {
+    return `
+      <img
+        class="hat-preview-image"
+        src="${preview}"
+        alt=""
+        style=" width: 96px; height: 96px; object-fit: contain; "
+      />
+    `;
+  }
+
+  // Emoji / text preview
+  return `
+    <span class="hat-preview-emoji">
+      ${preview}
+    </span>
+  `;
+}
+
 
 export function createWardrobe(
   character,
@@ -130,7 +167,7 @@ export function createWardrobe(
                 <div class="hat-preview">
                   ${
                     owned
-                      ? hat.preview
+                      ? renderPreview(hat.preview)
                       : "🔒"
                   }
                 </div>
