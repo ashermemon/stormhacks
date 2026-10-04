@@ -135,6 +135,24 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   const pips = rhythm.querySelector(".pips");
   const gradeText = rhythm.querySelector(".grade");
 
+  let currentShells = net.journal?.shells ?? 0;
+  const shellCounter = div(
+    "shell-counter",
+    `<span class="shell-icon">🐚</span><span class="shell-value">${currentShells}</span>`
+  );
+  shellCounter.title = "Shells (Click or press J for Journal)";
+  shellCounter.addEventListener("click", () => journal.toggle());
+
+  function setShells(newShells) {
+    if (newShells === currentShells) return;
+    currentShells = newShells;
+    const valEl = shellCounter.querySelector(".shell-value");
+    if (valEl) valEl.textContent = currentShells;
+    shellCounter.classList.remove("bump");
+    void shellCounter.offsetWidth;
+    shellCounter.classList.add("bump");
+  }
+
   // ---- trinkets in the world ------------------------------------------------
   function addTrinket(data, popIn = false) {
     const { group, colors } = buildTrinket(data.species, data.seed);
@@ -293,6 +311,7 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
     const highlights = [];
     if (result.newEntry) highlights.push(`${result.species}:${result.tier}`);
     if (result.newItem) highlights.push(result.item);
+    if (nextJournal?.shells !== undefined) setShells(nextJournal.shells);
     journal.update(nextJournal, highlights);
     startReveal(result, at);
   });
