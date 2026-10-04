@@ -172,6 +172,11 @@ export function createTrinkets({
     const pending = pendingHatPurchase;
     pendingHatPurchase = null;
 
+    const character = getCharacter(net.id);
+    if (character && message.hats) {
+      character.ownedHats = { ...character.ownedHats, ...message.hats };
+    }
+
     if (message.ok) {
       if (message.journal) {
         journal.update(message.journal);

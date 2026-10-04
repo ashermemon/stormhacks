@@ -187,6 +187,9 @@ export async function startGame(view) {
 
   // Local player.
   const me = new Character(scene, colorFor(net.id), net.name);
+  if (net.hats) {
+    me.ownedHats = { ...me.ownedHats, ...net.hats };
+  }
   const player = {
     x: SPAWN.x,
     y: getGroundHeight(SPAWN.x, SPAWN.z),
