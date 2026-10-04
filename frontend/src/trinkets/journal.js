@@ -3,18 +3,35 @@
 
 import { TIER_COLORS } from "./models.js";
 
-const SPECIES_ICON = { clam: "🐚", crab: "🦀", urchin: "🟣", snail: "🐌", fish: "🐟" };
-export function createJournal(catalog, initial, onToggle) {
+const SPECIES_ICON = {
+  clam: "🐚",
+  crab: "🦀",
+  urchin: "🟣",
+  snail: "🐌",
+  fish: "🐟",
+};
+
+export function createJournal(
+  catalog,
+  initial,
+  onToggle,
+) {
   let data = initial;
-  let stamps = new Set(); // entries to stamp-animate the next time the book is shown
+  let stamps = new Set();
 
   const book = document.createElement("div");
   book.id = "journal";
   book.hidden = true;
+
   const backdrop = document.createElement("div");
   backdrop.id = "journal-backdrop";
   backdrop.hidden = true;
-  backdrop.addEventListener("click", () => toggle(false));
+
+  backdrop.addEventListener(
+    "click",
+    () => toggle(false),
+  );
+
   document.body.appendChild(backdrop);
   document.body.appendChild(book);
 
@@ -24,66 +41,178 @@ export function createJournal(catalog, initial, onToggle) {
         const cells = catalog.tiers
           .map((tier) => {
             const key = `${species}:${tier}`;
-            const count = data.trinkets[key] ?? 0;
-            const stamp = stamps.has(key) ? " stamp" : "";
+            const count =
+              data.trinkets[key] ?? 0;
+            const stamp =
+              stamps.has(key) ? " stamp" : "";
+
             return count
-              ? `<td class="got${stamp}" style="--tier:${TIER_COLORS[tier]}">${SPECIES_ICON[species]}<small>×${count}</small></td>`
-              : `<td class="empty">?</td>`;
+              ? `
+                <td
+                  class="got${stamp}"
+                  style="--tier:${TIER_COLORS[tier]}"
+                >
+                  ${SPECIES_ICON[species]}
+                  <small>×${count}</small>
+                </td>
+              `
+              : `
+                <td class="empty">
+                  ?
+                </td>
+              `;
           })
           .join("");
-        return `<tr><th>${species}</th>${cells}</tr>`;
+
+        return `
+          <tr>
+            <th>${species}</th>
+            ${cells}
+          </tr>
+        `;
       })
       .join("");
 
     const finds = catalog.tiers
       .map((tier) => {
         const items = catalog.items
-          .filter((item) => item.tier === tier)
+          .filter(
+            (item) => item.tier === tier,
+          )
           .map((item) => {
-            const count = data.finds[item.id] ?? 0;
-            const stamp = stamps.has(item.id) ? " stamp" : "";
+            const count =
+              data.finds[item.id] ?? 0;
+            const stamp =
+              stamps.has(item.id)
+                ? " stamp"
+                : "";
+
             return count
-              ? `<li class="got${stamp}">${item.name} <small>×${count}</small></li>`
-              : `<li class="empty">???</li>`;
+              ? `
+                <li class="got${stamp}">
+                  ${item.name}
+                  <small>×${count}</small>
+                </li>
+              `
+              : `
+                <li class="empty">
+                  ???
+                </li>
+              `;
           })
           .join("");
-        return `<h4 style="color:${TIER_COLORS[tier]}">${tier}</h4><ul>${items}</ul>`;
+
+        return `
+          <h4 style="color:${TIER_COLORS[tier]}">
+            ${tier}
+          </h4>
+
+          <ul>
+            ${items}
+          </ul>
+        `;
       })
       .join("");
 
-    const tierHeads = catalog.tiers.map((t) => `<th style="color:${TIER_COLORS[t]}">${t[0].toUpperCase()}</th>`).join("");
+    const tierHeads =
+      catalog.tiers
+        .map(
+          (t) => `
+            <th style="color:${TIER_COLORS[t]}">
+              ${t[0].toUpperCase()}
+            </th>
+          `,
+        )
+        .join("");
+
     book.innerHTML = `
       <div class="page">
         <h3>Trinkets cracked</h3>
-        <table><tr><th></th>${tierHeads}</tr>${rows}</table>
-        <p class="shells">🐚 ${data.shells} shells</p>
+
+        <table>
+          <tr>
+            <th></th>
+            ${tierHeads}
+          </tr>
+
+          ${rows}
+        </table>
+
+        <p class="shells">
+          🐚 ${data.shells} shells
+        </p>
       </div>
+
       <div class="page">
         <h3>Treasures found</h3>
+
         ${finds}
-        <p class="hint">J to close</p>
-      </div>`;
+
+        <p class="hint">
+          J to close
+        </p>
+      </div>
+    `;
   }
 
-  function toggle(open = book.hidden) {
+  function toggle(
+    open = book.hidden,
+  ) {
     book.hidden = !open;
     backdrop.hidden = !open;
+
     if (open) {
       render();
-      stamps = new Set(); // the stamp animation plays once
-      
+      stamps = new Set();
     }
+
     onToggle?.(open);
   }
 
   return {
     toggle,
-    isOpen: () => !book.hidden,
-    /** Server sends the full journal after each crack; `highlights` are the entries to stamp. */
+
+    isOpen() {
+      return !book.hidden;
+    },
+
+    getShells() {
+      return data.shells ?? 0;
+    },
+
+    spendShells(amount) {
+      const cost = Number(amount);
+
+      if (!Number.isFinite(cost) || cost < 0) {
+        return false;
+      }
+
+      const shells =
+        data.shells ?? 0;
+
+      if (shells < cost) {
+        return false;
+      }
+
+      data = {
+        ...data,
+        shells: shells - cost,
+      };
+
+      if (!book.hidden) {
+        render();
+      }
+
+      return true;
+    },
+
     update(next, highlights = []) {
       data = next;
       stamps = new Set(highlights);
-      if (!book.hidden) render();
+
+      if (!book.hidden) {
+        render();
+      }
     },
   };
 }

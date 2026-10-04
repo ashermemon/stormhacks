@@ -434,10 +434,113 @@ addHat(hatId) {
   this.ownedHats[hatId] = true;
   return true;
 }
+removeHat() {
+  if (this.hat) {
+    this.hat.parent?.remove(this.hat);
+    this.hat = null;
+  }
+
+  this.hatId = "none";
+}
+
+async setHat(hatFile, hatId = null) {
+  if (!hatFile) {
+    this.removeHat();
+    return;
+  }
+
+  if (!this.model) {
+    await this.ready;
+  }
+
+  const head =
+    this.model?.getObjectByName("head");
+
+  if (!head) {
+    console.warn(
+      "Otter head bone not found; hat could not be attached.",
+    );
+
+    return;
+  }
+
+  this.removeHat();
+
+  let hatGltf;
+
+  if (hatFile === hatUrl) {
+    hatGltf =
+      await loadHatGltf();
+  } else {
+    hatGltf =
+      await loader.loadAsync(hatFile);
+  }
+
+  const hat =
+    hatGltf.scene.clone(true);
+
+  hat.name = "Hat";
+
+  hat.position.set(
+    0,
+    0.36,
+    0,
+  );
+
+  head.add(hat);
+
+  this.hat = hat;
+  this.hatId =
+    hatId ?? "hat";
+
+  return hat;
+}
+
+getHatId() {
+  return this.hatId;
+}
+
+getHat() {
+  return this.hat;
+}
+
+ownsHat(hatId) {
+  if (hatId === "none") {
+    return true;
+  }
+
+  return this.ownedHats[hatId] === true;
+}
+
+buyHat(hatId) {
+  if (!HAT_FILES[hatId]) {
+    console.warn(
+      `Unknown hat: ${hatId}`,
+    );
+
+    return false;
+  }
+
+  if (this.ownsHat(hatId)) {
+    console.warn(
+      `Hat already owned: ${hatId}`,
+    );
+
+    return false;
+  }
+
+  this.ownedHats[hatId] = true;
+
+  return true;
+}
+
 
 removeOwnedHat(hatId) {
   if (hatId === "wizardHat") {
-    console.warn("Cannot remove the default wizard hat ownership.");
+    console.warn(
+      "Cannot remove the default wizard hat ownership.",
+    );
+
     return false;
   }
 
@@ -451,8 +554,11 @@ removeOwnedHat(hatId) {
 }
 
 getOwnedHats() {
-  return { ...this.ownedHats };
+  return {
+    ...this.ownedHats,
+  };
 }
+
   dispose() {
     this.setName(null);
     this.scene.remove(this.root);

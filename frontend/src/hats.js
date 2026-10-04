@@ -7,23 +7,27 @@ const HATS = [
     name: "No Hat",
     file: null,
     preview: "—",
+    price: 0,
   },
   {
     id: "hat",
     name: "Hat",
     file: hatUrl,
     preview: "🎩",
+    price: 100,
   },
   {
     id: "wizardHat",
     name: "Wizard Hat",
     file: wizardHatUrl,
     preview: "🧙",
+    price: 250,
   },
 ];
 
 export function createWardrobe(
   character,
+  journal,
   onToggle,
 ) {
   let selected = character.getHatId();
@@ -52,6 +56,10 @@ export function createWardrobe(
     () => toggle(false),
   );
 
+  function getShells() {
+    return journal?.getShells?.() ?? 0;
+  }
+
   function ownsHat(hatId) {
     if (hatId === "none") {
       return true;
@@ -61,6 +69,8 @@ export function createWardrobe(
   }
 
   function render() {
+    const shells = getShells();
+
     wardrobe.innerHTML = `
       <div class="hat-page">
 
@@ -71,16 +81,31 @@ export function createWardrobe(
           ×
         </button>
 
-        <h2>Hat Wardrobe</h2>
+        <div class="hat-header">
+          <div>
+            <h2>Hat Wardrobe</h2>
 
-        <p class="hat-subtitle">
-          Choose something to wear
-        </p>
+            <p class="hat-subtitle">
+              Choose something to wear
+            </p>
+          </div>
+
+          <div class="hat-shells">
+            <span class="hat-shell-icon">
+              🐚
+            </span>
+
+            <span>
+              ${shells}
+            </span>
+          </div>
+        </div>
 
         <div class="hat-grid">
 
           ${HATS.map((hat, index) => {
-            const owned = ownsHat(hat.id);
+            const owned =
+              ownsHat(hat.id);
 
             return `
               <button
@@ -94,7 +119,6 @@ export function createWardrobe(
                     : ""
                 }"
                 data-hat="${index}"
-                ${!owned ? "disabled" : ""}
               >
                 <div class="hat-preview">
                   ${
@@ -108,11 +132,23 @@ export function createWardrobe(
                   ${hat.name}
                 </div>
 
+                <div class="hat-price">
+                  ${
+                    hat.price === 0
+                      ? "Free"
+                      : `🐚 ${hat.price}`
+                  }
+                </div>
+
                 ${
                   !owned
                     ? `
                       <div class="hat-locked">
-                        Locked
+                        ${
+                          shells >= hat.price
+                            ? "Buy"
+                            : "Not enough shells"
+                        }
                       </div>
                     `
                     : ""
@@ -157,9 +193,50 @@ export function createWardrobe(
   }
 
   async function selectHat(hat) {
-    if (!ownsHat(hat.id)) {
+    if (ownsHat(hat.id)) {
+      if (hat.file) {
+        const result =
+          await character.setHat(
+            hat.file,
+            hat.id,
+          );
+
+        if (!result) {
+          return;
+        }
+      } else {
+        character.removeHat();
+      }
+
+      selected = hat.id;
+      render();
+
+      return;
+    }
+
+    const shells = getShells();
+
+    if (shells < hat.price) {
       console.warn(
-        `Cannot equip ${hat.id}: hat is not owned.`,
+        `Cannot buy ${hat.id}: not enough shells.`,
+      );
+
+      return;
+    }
+
+    const purchased =
+      character.buyHat(hat.id);
+
+    if (!purchased) {
+      return;
+    }
+
+    const spent =
+      journal?.spendShells?.(hat.price);
+
+    if (!spent) {
+      console.warn(
+        `Could not deduct ${hat.price} shells for ${hat.id}.`,
       );
 
       return;
