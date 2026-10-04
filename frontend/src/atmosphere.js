@@ -4,11 +4,11 @@ import * as THREE from "three";
 // draws the world (toonshading.js, watershader.js, the sky and clouds in
 // environment.js), so the haze on the ground meets the sky at the horizon.
 
-// The sun you see: west-north-west, ~20 degrees up, resting just above the ridge as
-// seen from the meadow.
-export const SUN_DIRECTION = new THREE.Vector3(-0.83, 0.33, 0.37).normalize();
-// The light the toon shading uses: the same bearing, just above the sun.
-export const LIGHT_DIRECTION = new THREE.Vector3(-0.75, 0.56, 0.34).normalize();
+// The sun you see: low in the west-north-west (~12 degrees up), sitting among the
+// mountain peaks so it shines through the gaps between them.
+export const SUN_DIRECTION = new THREE.Vector3(-0.83, 0.2, 0.37).normalize();
+// The light the toon shading uses: the same bearing but higher, so the meadow stays lit.
+export const LIGHT_DIRECTION = new THREE.Vector3(-0.83, 0.42, 0.37).normalize();
 
 export const atmosphereUniforms = {
   atmoSunDir: { value: SUN_DIRECTION },

@@ -17,19 +17,23 @@ import { seededRandom } from "./trinkets/spawnZones.js";
 
 const SKY_RADIUS = 400; // inside the camera's far plane (500)
 const CLOUD_DRIFT = 0.004; // radians per second the cloud ring turns
-const SUN_RADIUS = 0.04; // angular radius in radians (~4.5 degrees across)
+const SUN_RADIUS = 0.12; // radians (~7 degrees): a big storybook sun
 
 const skyUniforms = {
   ...atmosphereUniforms,
   skyZenith: { value: new THREE.Color("#4fa6dc") },
   skyMid: { value: new THREE.Color("#8ccdec") },
-  sunCore: { value: new THREE.Color("#fffdf2") },
-  sunHalo: { value: new THREE.Color("#fff3d2") },
-  sunGlow: { value: new THREE.Color("#ffe8c0") },
+  skyTime: { value: 0 },
+  sunRim: { value: new THREE.Color("#ff9438") },
+  sunMid: { value: new THREE.Color("#ffb24d") },
+  sunCore: { value: new THREE.Color("#ffd98a") },
+  sunHalo: { value: new THREE.Color("#ffbf73") },
+  sunGlow: { value: new THREE.Color("#ffd6a3") },
 };
 
 // A gradient from the haze colour at the horizon to deep blue overhead, warmer toward
-// the sun, and the sun itself: a small bright disc in a soft glow.
+// the sun, and a big cartoon sun low among the mountains: a flat orange disk with
+// cel-shaded bands toward a golden middle, a warm halo, and slowly turning rays.
 const skyMaterial = new THREE.ShaderMaterial({
   uniforms: skyUniforms,
   vertexShader: /* glsl */ `
@@ -42,6 +46,9 @@ const skyMaterial = new THREE.ShaderMaterial({
   fragmentShader: /* glsl */ `
     uniform vec3 skyZenith;
     uniform vec3 skyMid;
+    uniform float skyTime;
+    uniform vec3 sunRim;
+    uniform vec3 sunMid;
     uniform vec3 sunCore;
     uniform vec3 sunHalo;
     uniform vec3 sunGlow;
@@ -61,10 +68,23 @@ const skyMaterial = new THREE.ShaderMaterial({
 
       float toSun = dot(dir, atmoSunDir);
       float angle = acos(clamp(toSun, -1.0, 1.0));
+      float pixel = fwidth(angle);
       float r = ${SUN_RADIUS.toFixed(4)};
-      sky = mix(sky, sunGlow, pow(max(toSun, 0.0), 10.0) * 0.4); // wide warm glow
-      sky = mix(sky, sunHalo, exp(-angle / (r * 1.6)) * 0.8); // bright halo
-      sky = mix(sky, sunCore, 1.0 - smoothstep(r * 0.8, r, angle)); // the disc
+      sky = mix(sky, sunGlow, pow(max(toSun, 0.0), 6.0) * 0.5); // wide warm wash
+      sky = mix(sky, sunHalo, exp(-pow(angle / (r * 2.2), 2.0)) * 0.65); // halo
+
+      // Rays: soft wedges around the sun, turning very slowly, fading outward.
+      vec3 side = normalize(cross(atmoSunDir, vec3(0.0, 1.0, 0.0)));
+      vec3 lift = cross(side, atmoSunDir);
+      float around = atan(dot(dir, lift), dot(dir, side));
+      float ray = smoothstep(0.55, 0.8, sin(around * 9.0 + skyTime * 0.05));
+      ray *= smoothstep(r, r * 1.3, angle) * (1.0 - smoothstep(r * 1.5, r * 4.5, angle));
+      sky = mix(sky, sunHalo, ray * 0.35);
+
+      // The disk: crisp cartoon edges, orange rim banding in to a golden core.
+      vec3 sun = mix(sunRim, sunMid, 1.0 - smoothstep(r * 0.82 - pixel, r * 0.82 + pixel, angle));
+      sun = mix(sun, sunCore, 1.0 - smoothstep(r * 0.5 - pixel, r * 0.5 + pixel, angle));
+      sky = mix(sky, sun, 1.0 - smoothstep(r - pixel, r + pixel, angle));
       gl_FragColor = vec4(sky, 1.0);
       #include <colorspace_fragment>
     }
@@ -207,6 +227,7 @@ export function createEnvironment(scene) {
   return {
     update(camera, elapsedSeconds) {
       sky.position.copy(camera.position); // the sky is infinitely far: it moves with you
+      skyUniforms.skyTime.value = elapsedSeconds;
       if (!clouds) return;
       clouds.rotation.y = elapsedSeconds * CLOUD_DRIFT;
       for (const cloud of clouds.children) {
