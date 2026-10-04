@@ -107,7 +107,7 @@ export function createChat({ net, camera, getCharacter }) {
     root.classList.remove('open');
     input.blur();
   }
-const noNoWords = ["fuck", "shit", "bitch", "cunt", "nigger", "faggot", "asshole", "dick", "pussy", "cock", "slut", "whore", "nigga", "fag", "bastard", "douchebag", "motherfucker", "twat", "retard", "idiot"];
+const noNoWords = ["fuck", "shit", "bitch", "cunt", "nigger", "faggot", "asshole", "dick", "pussy", "cock", "slut", "whore", "nigga", "fag", "bastard", "douchebag", "motherfucker", "twat", "retard","penis","sex","fvck","fock","fick"];
   function submit() {
     const text = input.value.trim();
     if (!text) return;
