@@ -118,36 +118,30 @@ export function createJournal(catalog, initial, onToggle) {
 
     const finds = catalog.tiers
       .map((tier) => {
-        const items = catalog.items
-          .filter((item) => item.tier === tier)
+        // 1. Get all items belonging to this tier
+        const tierItems = catalog.items.filter((item) => item.tier === tier);
+
+        // 2. Map only the items the user has actually found
+        const foundItemsHtml = tierItems
           .map((item) => {
             const count = data.finds[item.id] ?? 0;
             const stamp = stamps.has(item.id) ? " stamp" : "";
 
+            // Return the HTML string if found, otherwise return null
             return count
-              ? `
-                <li class="got${stamp}">
-                  ${item.name}
-                  <small>×${count}</small>
-                </li>
-              `
-              : `
-                <li class="empty">
-                  ???
-                </li>
-              `;
+              ? `<li class="got${stamp}">${item.name} <small>×${count}</small></li>`
+              : null;
           })
+          .filter(Boolean) // Remove the nulls (missing items)
           .join("");
 
-        return `
-          <h4 style="color:${TIER_COLORS[tier]}">
-            ${tier}
-          </h4>
+        // 3. Fallback to a single "???" if no items were found in this tier
+        const itemsListHtml = foundItemsHtml || `<li class="empty">???</li>`;
 
-          <ul>
-            ${items}
-          </ul>
-        `;
+        return `
+      <h4 style="color:${TIER_COLORS[tier]}"> ${tier} </h4>
+      <ul> ${itemsListHtml} </ul>
+    `;
       })
       .join("");
 
