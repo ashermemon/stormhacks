@@ -3,13 +3,12 @@ import { connect } from "./net.js";
 import { keys } from "./input.js";
 import { createAquaticArea } from "./water.js";
 import { createEnvironment } from "./environment.js";
-import { LIGHT_DIRECTION } from "./atmosphere.js";
 import { loadWorld } from "./world.js";
 import { applyToonWater, updateWater } from "./watershader.js";
 import { Character, OTTER_COLORS } from "./character.js";
 import { createChat } from "./chat.js";
 import { trackNames } from "./names.js";
-import { setToonLight, toonifyScene, updateWind } from "./toonshading.js";
+import { toonifyScene, updateWind } from "./toonshading.js";
 import { createScenery } from "./scenery.js";
 import { createFish } from "./fish.js";
 import { createTrinkets } from "./trinkets/trinkets.js";
@@ -92,7 +91,6 @@ export async function startGame() {
   };
 
   // Cel-shade everything built so far (the water keeps its own shader); otters are styled in Character.
-  setToonLight(LIGHT_DIRECTION.x, LIGHT_DIRECTION.y, LIGHT_DIRECTION.z);
   toonifyScene(scene);
 
   // Remote players.

@@ -4,16 +4,17 @@ import * as THREE from "three";
 // draws the world (toonshading.js, watershader.js, the sky and clouds in
 // environment.js), so the haze on the ground meets the sky at the horizon.
 
-// The sun you see: low in the west-north-west (~12 degrees up), sitting among the
-// mountain peaks so it shines through the gaps between them.
-export const SUN_DIRECTION = new THREE.Vector3(-0.83, 0.2, 0.37).normalize();
-// The light the toon shading uses: the same bearing but higher, so the meadow stays lit.
-export const LIGHT_DIRECTION = new THREE.Vector3(-0.83, 0.42, 0.37).normalize();
+// Toward the sun. daycycle.js moves it (and every value below marked "cycle") each
+// frame; these starting values are a mid-afternoon sun.
+export const SUN_DIRECTION = new THREE.Vector3(-0.83, 0.33, 0.37).normalize();
 
 export const atmosphereUniforms = {
   atmoSunDir: { value: SUN_DIRECTION },
-  atmoHazeColor: { value: new THREE.Color("#d3ebf2") }, // also the sky at the horizon
-  atmoSunHaze: { value: new THREE.Color("#ffc994") }, // peachy haze looking toward the sun
+  atmoLightDir: { value: new THREE.Vector3(0, 1, 0) }, // cycle: the toon light (sun or moon)
+  atmoHazeColor: { value: new THREE.Color("#d3ebf2") }, // cycle; also the sky at the horizon
+  atmoSunHaze: { value: new THREE.Color("#ffc994") }, // cycle: haze looking toward the sun
+  atmoSceneTint: { value: new THREE.Color(1, 1, 1) }, // cycle: light colour on everything
+  atmoDaylight: { value: 1 }, // cycle: 1 by day, 0 at night
   atmoNear: { value: 40 }, // haze starts this far from the camera...
   atmoFar: { value: 240 }, // ...and is full this far
   atmoStrength: { value: 0.75 }, // full haze is this opaque
@@ -22,10 +23,14 @@ export const atmosphereUniforms = {
   atmoTopKeep: { value: 0.55 }, // how much haze is left above atmoTop
 };
 
-// GLSL: atmosphere(color, worldPos) mixes a linear colour toward the haze. Call it
-// before <colorspace_fragment>. Needs `cameraPosition` (three provides it).
+// GLSL: atmosphere(color, worldPos) tints a linear colour by the time of day's light
+// and mixes it toward the haze. Call it before <colorspace_fragment>. Needs
+// `cameraPosition` (three provides it).
 export const atmosphereGlsl = /* glsl */ `
   uniform vec3 atmoSunDir;
+  uniform vec3 atmoLightDir;
+  uniform vec3 atmoSceneTint;
+  uniform float atmoDaylight;
   uniform vec3 atmoHazeColor;
   uniform vec3 atmoSunHaze;
   uniform float atmoNear;
@@ -45,6 +50,6 @@ export const atmosphereGlsl = /* glsl */ `
     float dist = length(toPoint);
     float haze = smoothstep(atmoNear, atmoFar, dist) * atmoStrength;
     haze *= mix(1.0, atmoTopKeep, smoothstep(atmoBase, atmoTop, worldPos.y));
-    return mix(color, hazeColorToward(toPoint / max(dist, 1e-4)), haze);
+    return mix(color * atmoSceneTint, hazeColorToward(toPoint / max(dist, 1e-4)), haze);
   }
 `;

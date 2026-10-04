@@ -1,15 +1,13 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import cloudsUrl from "../assets/models/world/clouds/Clouds.glb?url";
-import {
-  atmosphereGlsl,
-  atmosphereUniforms,
-  SUN_DIRECTION,
-} from "./atmosphere.js";
+import { atmosphereGlsl, atmosphereUniforms } from "./atmosphere.js";
+import { createDayCycle } from "./daycycle.js";
 import { seededRandom } from "./trinkets/spawnZones.js";
 
-// Sky, sun and clouds. The ground, water and mountains come from World.glb (world.js);
-// the haze that ties them to the sky lives in atmosphere.js.
+// Sky, sun, moon, stars and clouds. The ground, water and mountains come from World.glb
+// (world.js); the haze that ties them to the sky lives in atmosphere.js, and the time
+// of day that colours all of it in daycycle.js.
 //
 //   const environment = createEnvironment(scene);
 //   // every frame, after the camera has moved:
@@ -17,23 +15,29 @@ import { seededRandom } from "./trinkets/spawnZones.js";
 
 const SKY_RADIUS = 400; // inside the camera's far plane (500)
 const CLOUD_DRIFT = 0.004; // radians per second the cloud ring turns
-const SUN_RADIUS = 0.12; // radians (~7 degrees): a big storybook sun
+const SUN_RADIUS = 0.04; // angular radius in radians (~4.5 degrees across)
+const MOON_RADIUS = 0.02; // same size as the sun
 
+// Colours marked "cycle" are set every frame from daycycle.js.
 const skyUniforms = {
   ...atmosphereUniforms,
-  skyZenith: { value: new THREE.Color("#4fa6dc") },
-  skyMid: { value: new THREE.Color("#8ccdec") },
   skyTime: { value: 0 },
-  sunRim: { value: new THREE.Color("#ff9438") },
-  sunMid: { value: new THREE.Color("#ffb24d") },
-  sunCore: { value: new THREE.Color("#ffd98a") },
-  sunHalo: { value: new THREE.Color("#ffbf73") },
-  sunGlow: { value: new THREE.Color("#ffd6a3") },
+  skyZenith: { value: new THREE.Color("#4fa6dc") }, // cycle
+  skyMid: { value: new THREE.Color("#8ccdec") }, // cycle
+  sunCore: { value: new THREE.Color("#fffdf2") }, // cycle
+  sunHalo: { value: new THREE.Color("#fff3d2") }, // cycle
+  sunGlow: { value: new THREE.Color("#ffe8c0") }, // cycle
+  sunVisible: { value: 1 }, // cycle
+  moonDir: { value: new THREE.Vector3(0, -1, 0) }, // cycle
+  moonVisible: { value: 0 }, // cycle
+  starAmount: { value: 0 }, // cycle
+  moonColor: { value: new THREE.Color("#eef2ff") },
+  moonGlow: { value: new THREE.Color("#8fa6dc") },
 };
 
-// A gradient from the haze colour at the horizon to deep blue overhead, warmer toward
-// the sun, and a big cartoon sun low among the mountains: a flat orange disk with
-// cel-shaded bands toward a golden middle, a warm halo, and slowly turning rays.
+// A gradient from the haze colour at the horizon to the zenith colour overhead,
+// warmer toward the sun; the sun (a small bright disc in a soft glow); and at night a
+// thin crescent moon drawn the same way, in a cool glow, with twinkling stars.
 const skyMaterial = new THREE.ShaderMaterial({
   uniforms: skyUniforms,
   vertexShader: /* glsl */ `
@@ -44,17 +48,29 @@ const skyMaterial = new THREE.ShaderMaterial({
     }
   `,
   fragmentShader: /* glsl */ `
+    uniform float skyTime;
     uniform vec3 skyZenith;
     uniform vec3 skyMid;
-    uniform float skyTime;
-    uniform vec3 sunRim;
-    uniform vec3 sunMid;
     uniform vec3 sunCore;
     uniform vec3 sunHalo;
     uniform vec3 sunGlow;
+    uniform float sunVisible;
+    uniform vec3 moonDir;
+    uniform float moonVisible;
+    uniform float starAmount;
+    uniform vec3 moonColor;
+    uniform vec3 moonGlow;
     ${atmosphereGlsl}
     varying vec3 vDir;
 
+    float hash(vec3 p) {
+      return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+    }
+
+    // 1 inside a disc of radius 1 at c, with the same soft edge as the sun.
+    float disc(vec2 p, vec2 c) {
+      return 1.0 - smoothstep(0.8, 1.0, length(p - c));
+    }
 
     void main() {
       vec3 dir = normalize(vDir);
@@ -66,25 +82,58 @@ const skyMaterial = new THREE.ShaderMaterial({
       vec3 sky = mix(mist, skyMid, smoothstep(0.08, 0.38, up));
       sky = mix(sky, skyZenith, smoothstep(0.35, 0.85, up));
 
+      // Stars: one in a few cells of a grid over the sky, twinkling, above the mist.
+      vec3 cell = floor(dir * 160.0);
+      float seed = hash(cell);
+      vec3 spot = (cell + 0.5 + (vec3(hash(cell + 1.3), hash(cell + 2.7), hash(cell + 4.1)) - 0.5) * 0.6) / 160.0;
+      float star = step(0.975, seed) * (1.0 - smoothstep(0.0006, 0.0016, length(dir - normalize(spot))));
+      star *= 0.6 + 0.4 * sin(skyTime * (1.5 + seed * 3.0) + seed * 40.0);
+      sky += vec3(0.9, 0.93, 1.0) * star * starAmount * smoothstep(0.05, 0.3, up);
+
+      // Shooting stars: a few slots, each now and then streaking a bright head and a
+      // fading tail across a random patch of sky in under a second.
+      for (int i = 0; i < 3; i++) {
+        float slot = float(i);
+        float period = 9.0 + slot * 5.5;
+        float t = skyTime + slot * 3.1;
+        float n = floor(t / period);
+        float life = (t - n * period) / 0.8; // 0..1 over 0.8 s
+        if (life > 1.0 || hash(vec3(n, slot, 7.0)) < 0.5) continue;
+        float az = hash(vec3(n, slot, 1.0)) * 6.2832;
+        float el = mix(0.45, 1.0, hash(vec3(n, slot, 2.0))); // ~26-57 degrees up
+        vec3 start = vec3(cos(az) * cos(el), sin(el), sin(az) * cos(el));
+        vec3 across = normalize(cross(start, vec3(0.0, 1.0, 0.0)));
+        if (hash(vec3(n, slot, 3.0)) > 0.5) across = -across;
+        vec3 down = -normalize(vec3(0.0, 1.0, 0.0) - start * start.y);
+        vec3 travel = normalize(across + down * 0.6);
+        vec3 head = normalize(start + travel * 0.35 * life);
+        vec3 tail = normalize(start + travel * 0.35 * max(life - 0.35, 0.0));
+        vec3 seg = head - tail;
+        float along = clamp(dot(dir - tail, seg) / max(dot(seg, seg), 1e-8), 0.0, 1.0);
+        float d = length(dir - (tail + seg * along));
+        float streak = (1.0 - smoothstep(0.0008, 0.0025, d)) * along * sin(life * 3.14159);
+        sky += vec3(1.0, 0.97, 0.9) * streak * starAmount * smoothstep(0.1, 0.3, up);
+      }
+
       float toSun = dot(dir, atmoSunDir);
       float angle = acos(clamp(toSun, -1.0, 1.0));
-      float pixel = fwidth(angle);
       float r = ${SUN_RADIUS.toFixed(4)};
-      sky = mix(sky, sunGlow, pow(max(toSun, 0.0), 6.0) * 0.5); // wide warm wash
-      sky = mix(sky, sunHalo, exp(-pow(angle / (r * 2.2), 2.0)) * 0.65); // halo
+      sky = mix(sky, sunGlow, pow(max(toSun, 0.0), 10.0) * 0.4 * sunVisible); // wide warm glow
+      sky = mix(sky, sunHalo, exp(-angle / (r * 1.6)) * 0.8 * sunVisible); // bright halo
+      sky = mix(sky, sunCore, (1.0 - smoothstep(r * 0.8, r, angle)) * sunVisible); // the disc
 
-      // Rays: soft wedges around the sun, turning very slowly, fading outward.
-      vec3 side = normalize(cross(atmoSunDir, vec3(0.0, 1.0, 0.0)));
-      vec3 lift = cross(side, atmoSunDir);
-      float around = atan(dot(dir, lift), dot(dir, side));
-      float ray = smoothstep(0.55, 0.8, sin(around * 9.0 + skyTime * 0.05));
-      ray *= smoothstep(r, r * 1.3, angle) * (1.0 - smoothstep(r * 1.5, r * 4.5, angle));
-      sky = mix(sky, sunHalo, ray * 0.35);
-
-      // The disk: crisp cartoon edges, orange rim banding in to a golden core.
-      vec3 sun = mix(sunRim, sunMid, 1.0 - smoothstep(r * 0.82 - pixel, r * 0.82 + pixel, angle));
-      sun = mix(sun, sunCore, 1.0 - smoothstep(r * 0.5 - pixel, r * 0.5 + pixel, angle));
-      sky = mix(sky, sun, 1.0 - smoothstep(r - pixel, r + pixel, angle));
+      // Moon: glows like the sun but cool and dimmer, then a thin crescent: its disc
+      // with a slightly offset disc cut out of it.
+      float toMoon = dot(dir, moonDir);
+      float moonAngle = acos(clamp(toMoon, -1.0, 1.0));
+      float mr = ${MOON_RADIUS.toFixed(4)};
+      sky = mix(sky, moonGlow, pow(max(toMoon, 0.0), 10.0) * 0.25 * moonVisible); // wide cool glow
+      sky = mix(sky, moonGlow, exp(-moonAngle / (mr * 1.6)) * 0.45 * moonVisible); // halo
+      vec3 side = normalize(cross(moonDir, vec3(0.0, 1.0, 0.0)));
+      vec3 lift = cross(side, moonDir);
+      vec2 face = vec2(dot(dir, side), dot(dir, lift)) / mr; // in moon radii
+      float crescent = disc(face, vec2(0.0)) * (1.0 - disc(face, vec2(0.36, 0.2)));
+      sky = mix(sky, moonColor, crescent * step(0.0, toMoon) * moonVisible);
       gl_FragColor = vec4(sky, 1.0);
       #include <colorspace_fragment>
     }
@@ -128,12 +177,13 @@ const cloudMaterial = new THREE.ShaderMaterial({
       vec3 n = normalize(vNormalW);
       if (!gl_FrontFacing) n = -n;
       vec3 view = normalize(vWorld - cameraPosition);
-      float light = dot(n, atmoSunDir);
+      float light = dot(n, atmoLightDir);
       float w = fwidth(light) * 0.75;
       vec3 col = vTint * mix(cloudShade, vec3(1.0), smoothstep(-0.15 - w, -0.15 + w, light));
-      // Edges seen against the sun catch warm light.
+      col *= atmoSceneTint * mix(0.6, 1.0, atmoDaylight); // the time of day's light; dimmer at night
+      // Edges seen against the sun catch warm light (not at night).
       float rim = pow(1.0 - abs(dot(n, view)), 3.0) * max(dot(view, atmoSunDir), 0.0);
-      col = mix(col, cloudRim, smoothstep(0.15, 0.3, rim) * 0.7);
+      col = mix(col, cloudRim * atmoSceneTint, smoothstep(0.15, 0.3, rim) * 0.7 * atmoDaylight);
       float dist = length(vWorld - cameraPosition);
       // Far clouds, and low ones sitting in the horizon mist, fade into it.
       float haze = max(smoothstep(120.0, 420.0, dist) * 0.3, (1.0 - smoothstep(0.02, 0.25, view.y)) * 0.3);
@@ -220,14 +270,28 @@ export function createEnvironment(scene) {
 
   // The toon shader ignores lights; these are for any plain three materials.
   scene.add(new THREE.HemisphereLight(0xfff4d6, 0x315447, 1.5));
-  const sun = new THREE.DirectionalLight(0xffe2a6, 2);
-  sun.position.copy(SUN_DIRECTION).multiplyScalar(50);
-  scene.add(sun);
+  scene.add(new THREE.DirectionalLight(0xffe2a6, 2));
+
+  const cycle = createDayCycle();
 
   return {
     update(camera, elapsedSeconds) {
-      sky.position.copy(camera.position); // the sky is infinitely far: it moves with you
+      const day = cycle.update();
+      const { colors } = day;
       skyUniforms.skyTime.value = elapsedSeconds;
+      skyUniforms.skyZenith.value.copy(colors.zenith);
+      skyUniforms.skyMid.value.copy(colors.mid);
+      skyUniforms.sunCore.value.copy(colors.sunCore);
+      skyUniforms.sunHalo.value.copy(colors.sunHalo);
+      skyUniforms.sunGlow.value.copy(colors.sunGlow);
+      skyUniforms.sunVisible.value = day.sunVisible;
+      skyUniforms.moonDir.value.copy(day.moon);
+      skyUniforms.moonVisible.value = day.moonVisible;
+      skyUniforms.starAmount.value = day.night;
+      scene.fog.color.copy(colors.haze);
+      scene.background.copy(colors.haze);
+
+      sky.position.copy(camera.position); // the sky is infinitely far: it moves with you
       if (!clouds) return;
       clouds.rotation.y = elapsedSeconds * CLOUD_DRIFT;
       for (const cloud of clouds.children) {
