@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { WATER_BOTTOM, WATER_WIDTH } from "./water.js";
+
 const GROUND_TOP = -0.08;
 const GROUND_BOTTOM = WATER_BOTTOM - 2;
 const WATER_FLOOR_Y = WATER_BOTTOM - 0.1;
