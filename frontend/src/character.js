@@ -21,6 +21,13 @@ const SURFACE_IDLE_SPEED = 0.3; // below this at the surface he just floats on h
 // Surface clip: 0-1.4 s is the upward swim (looped while climbing), the rest is
 // the level-out, head pop and shake, played once on reaching the top.
 const SURFACE_CLIMB_END = 1.4;
+// Jump: JumpStart on leaving the ground, JumpAir until touchdown, JumpLand on impact.
+const AIRBORNE_HEIGHT = 0.05; // above the ground by more than this = in the air
+const JUMP_CLIPS = { start: "JumpStart", air: "JumpAir", land: "JumpLand" };
+const JUMP_FADES = { start: 0.1, air: 0.05, land: 0.08 };
+// JumpStart ends on JumpAir's first frame and JumpLand on Idle's, so barely blend.
+const JUMP_HANDOFF_FADE = 0.05;
+const LAND_SQUASH_TIME = 0.25; // walking can cut JumpLand short, but only after the squash
 const CLIP_FOR_MODE = {
   surface: "SwimSurface",
   dive: "Dive",
@@ -133,9 +140,9 @@ export class Character {
         this.actions.SwimFloat = this.mixer.clipAction(floatClip);
         this.actions.SwimFloat.setLoop(THREE.LoopPingPong);
       }
-      if (this.actions.Surface) {
-        this.actions.Surface.setLoop(THREE.LoopOnce);
-        this.actions.Surface.clampWhenFinished = true;
+      for (const once of ["Surface", "JumpStart", "JumpLand"]) {
+        this.actions[once]?.setLoop(THREE.LoopOnce);
+        if (this.actions[once]) this.actions[once].clampWhenFinished = true;
       }
       this.play("Idle");
     }
@@ -204,11 +211,21 @@ export class Character {
         surfaceClip.time = SURFACE_CLIMB_END;
       if (surfaceClip.isRunning()) name = "Surface";
     }
+    let fade = null;
+    this.updateJumpPhase(mode, y);
+    if (this.jumpPhase) {
+      name = JUMP_CLIPS[this.jumpPhase];
+      fade = JUMP_FADES[this.jumpPhase];
+    } else if (this.current && this.current === this.actions.JumpLand) {
+      fade = name === "Idle" ? JUMP_HANDOFF_FADE : LAND_FADE;
+    }
+
     // Slower crossfade whenever a swim clip is on either side of the switch.
     const leavingSwim = [...Object.values(CLIP_FOR_MODE), "SwimFloat"].some(
       (clip) => this.current === this.actions[clip],
     );
-    this.play(name, mode !== "land" || leavingSwim ? SWIM_FADE : LAND_FADE);
+    fade ??= mode !== "land" || leavingSwim ? SWIM_FADE : LAND_FADE;
+    this.play(name, fade);
     if (this.actions.Dive) {
       this.actions.Dive.timeScale =
         mode === "hover" ? HOVER_ANIMATION_SPEED : 1;
@@ -221,6 +238,29 @@ export class Character {
     // Keep repeating the upward swim until he hits the surface.
     if (climbing && surfaceClip && surfaceClip.time >= SURFACE_CLIMB_END) {
       surfaceClip.time %= SURFACE_CLIMB_END;
+    }
+  }
+
+  // Works from height alone so remote players' jumps animate too.
+  updateJumpPhase(mode, y) {
+    const { JumpStart: start, JumpAir: air, JumpLand: land } = this.actions;
+    if (mode !== "land" || !start || !air || !land) {
+      this.jumpPhase = null;
+      return;
+    }
+    const airborne = y > AIRBORNE_HEIGHT;
+    const inAir = this.jumpPhase === "start" || this.jumpPhase === "air";
+    if (airborne) {
+      if (!inAir) this.jumpPhase = "start";
+      else if (this.jumpPhase === "start" && !start.isRunning()) this.jumpPhase = "air";
+    } else if (inAir) {
+      this.jumpPhase = "land";
+    } else if (
+      this.jumpPhase === "land" &&
+      (!land.isRunning() ||
+        (this.speed > WALK_SPEED_THRESHOLD && land.time > LAND_SQUASH_TIME))
+    ) {
+      this.jumpPhase = null; // landing done, or walking off cuts it short
     }
   }
 
