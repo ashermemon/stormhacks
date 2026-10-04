@@ -8,16 +8,23 @@ const WORK_SIZE = 512; // blurs run at this resolution, then get upsampled
 // 1 px here is about 0.6 units). The sand rim is thin, so its blend stays narrow.
 const SHORE_GRASS_RADIUS = 2;
 const GRASS_MOUNTAIN_RADIUS = 7;
-const ROCK_SNOW_RADIUS = 3; // snow patches can be small, so keep this tighter
+// Snow fades outward into the rock (snow pixels themselves are left white, so even
+// small snow patches keep their colour).
+const ROCK_SNOW_RADIUS = 4;
 
 const SHORE = 0;
 const GRASS = 1;
 const ROCK = 2;
 const SNOW = 3;
 
+const isSnow = (r, g, b) => Math.min(r, g, b) > 190;
+// Stricter test for "leave this pixel alone": the texture's anti-aliased snow edge
+// pixels are greyish and should be faded too, or they'd leave a faint grey rim.
+const isPureSnow = (r, g, b) => Math.min(r, g, b) > 228;
+
 function zoneOf(r, g, b) {
   if (g - Math.max(r, b) > 30) return GRASS; // the two greens
-  if (Math.min(r, g, b) > 190) return SNOW; // near-white
+  if (isSnow(r, g, b)) return SNOW; // near-white
   if (r - b > 30) return SHORE; // sand rim and stream/pond bed
   return ROCK; // the two greys
 }
@@ -39,6 +46,8 @@ export function softenTerrainTexture(texture) {
   const sp = small.ctx.getImageData(0, 0, n, n).data;
   const rgb = [0, 1, 2].map(() => new Float32Array(n * n));
   const zones = [0, 1, 2, 3].map(() => new Float32Array(n * n));
+  const snowColor = [0, 0, 0];
+  let snowCount = 0;
   for (let i = 0; i < n * n; i++) {
     const r = sp[i * 4];
     const g = sp[i * 4 + 1];
@@ -46,8 +55,16 @@ export function softenTerrainTexture(texture) {
     rgb[0][i] = r;
     rgb[1][i] = g;
     rgb[2][i] = b;
-    zones[zoneOf(r, g, b)][i] = 1;
+    const zone = zoneOf(r, g, b);
+    zones[zone][i] = 1;
+    if (zone === SNOW) {
+      snowColor[0] += r;
+      snowColor[1] += g;
+      snowColor[2] += b;
+      snowCount++;
+    }
   }
+  for (let c = 0; c < 3; c++) snowColor[c] /= Math.max(snowCount, 1);
 
   // Narrow blend for shore<->grass, medium for rock<->snow, wide for grass<->mountain.
   const blurAll = (planes, radius) => planes.map((p) => blur(p, n, radius));
@@ -55,8 +72,7 @@ export function softenTerrainTexture(texture) {
   const narrowZones = blurAll(zones, SHORE_GRASS_RADIUS);
   const wideRgb = blurAll(rgb, GRASS_MOUNTAIN_RADIUS);
   const wideZones = blurAll(zones, GRASS_MOUNTAIN_RADIUS);
-  const snowRgb = blurAll(rgb, ROCK_SNOW_RADIUS);
-  const snowZones = blurAll(zones, ROCK_SNOW_RADIUS);
+  const snowNearby = blur(zones[SNOW], n, ROCK_SNOW_RADIUS);
 
   // Blend weight peaks (1) where two zones meet 50/50 and is 0 inside a zone.
   const shoreGrass = new Float32Array(n * n);
@@ -66,7 +82,8 @@ export function softenTerrainTexture(texture) {
     shoreGrass[i] = smooth(4 * narrowZones[SHORE][i] * narrowZones[GRASS][i]);
     const mountain = wideZones[ROCK][i] + wideZones[SNOW][i];
     grassMountain[i] = smooth(4 * wideZones[GRASS][i] * mountain);
-    rockSnow[i] = smooth(4 * snowZones[ROCK][i] * snowZones[SNOW][i]);
+    // 1 right at a snow edge (half the neighbourhood is snow), fading to 0 outward.
+    rockSnow[i] = smooth(2 * snowNearby[i]);
   }
 
   // Composite at full resolution, bilinearly sampling the small planes.
@@ -93,10 +110,11 @@ export function softenTerrainTexture(texture) {
       const ws = sample(shoreGrass);
       if (wm < 0.002 && wn < 0.002 && ws < 0.002) continue;
       const o = (y * width + x) * 4;
+      const snow = isPureSnow(px[o], px[o + 1], px[o + 2]);
       for (let c = 0; c < 3; c++) {
         let v = px[o + c];
         if (wm >= 0.002) v += (sample(wideRgb[c]) - v) * wm;
-        if (wn >= 0.002) v += (sample(snowRgb[c]) - v) * wn;
+        if (wn >= 0.002 && !snow) v += (snowColor[c] - v) * wn;
         if (ws >= 0.002) v += (sample(narrowRgb[c]) - v) * ws;
         px[o + c] = v;
       }
