@@ -4,14 +4,16 @@ import * as THREE from "three";
 // draws the world (toonshading.js, watershader.js, the sky and clouds in
 // environment.js), so the haze on the ground meets the sky at the horizon.
 
-// Toward the sun: low in the west-north-west, so it shows over the mountains and
-// rakes the hills with longer shadow sides.
-export const SUN_DIRECTION = new THREE.Vector3(-0.83, 0.42, 0.37).normalize();
+// The sun you see: low in the west-north-west (~12 degrees up), sitting among the
+// mountain peaks so it shines through the gaps between them.
+export const SUN_DIRECTION = new THREE.Vector3(-0.83, 0.2, 0.37).normalize();
+// The light the toon shading uses: the same bearing but higher, so the meadow stays lit.
+export const LIGHT_DIRECTION = new THREE.Vector3(-0.83, 0.42, 0.37).normalize();
 
 export const atmosphereUniforms = {
   atmoSunDir: { value: SUN_DIRECTION },
   atmoHazeColor: { value: new THREE.Color("#d3ebf2") }, // also the sky at the horizon
-  atmoSunHaze: { value: new THREE.Color("#ffe2b0") }, // warmer haze looking toward the sun
+  atmoSunHaze: { value: new THREE.Color("#ffc994") }, // peachy haze looking toward the sun
   atmoNear: { value: 40 }, // haze starts this far from the camera...
   atmoFar: { value: 240 }, // ...and is full this far
   atmoStrength: { value: 0.75 }, // full haze is this opaque
