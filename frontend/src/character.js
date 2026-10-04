@@ -9,7 +9,7 @@ const NAMETAG_GAP = 0.4;
 const MODEL_SCALE = 1.8;
 const WALK_SPEED_THRESHOLD = 0.8; // units/sec
 const SPEED_SMOOTHING = 12;
-const WALK_ANIMATION_SPEED = 1.3; // playback rate of the Walk clip
+const WALK_ANIMATION_SPEED = 1.6; // playback rate of the Walk clip
 const LAND_FADE = 0.2;
 const SWIM_FADE = 0.4; // standing -> horizontal blend reads as a flop into the water
 const HOVER_ANIMATION_SPEED = 0.4; // clip rate while treading water below the surface
@@ -181,7 +181,11 @@ export class Character {
       CLIP_FOR_MODE[mode] ??
       (this.speed > WALK_SPEED_THRESHOLD ? "Walk" : "Idle");
 
-    if (mode === "surface" && this.speed < SURFACE_IDLE_SPEED && this.actions.SwimFloat) {
+    if (
+      mode === "surface" &&
+      this.speed < SURFACE_IDLE_SPEED &&
+      this.actions.SwimFloat
+    ) {
       name = "SwimFloat";
     }
 
@@ -196,7 +200,8 @@ export class Character {
     const finishingSurface =
       mode === "surface" && surfaceClip && this.current === surfaceClip;
     if (finishingSurface) {
-      if (surfaceClip.time < SURFACE_CLIMB_END) surfaceClip.time = SURFACE_CLIMB_END;
+      if (surfaceClip.time < SURFACE_CLIMB_END)
+        surfaceClip.time = SURFACE_CLIMB_END;
       if (surfaceClip.isRunning()) name = "Surface";
     }
     // Slower crossfade whenever a swim clip is on either side of the switch.
@@ -205,7 +210,8 @@ export class Character {
     );
     this.play(name, mode !== "land" || leavingSwim ? SWIM_FADE : LAND_FADE);
     if (this.actions.Dive) {
-      this.actions.Dive.timeScale = mode === "hover" ? HOVER_ANIMATION_SPEED : 1;
+      this.actions.Dive.timeScale =
+        mode === "hover" ? HOVER_ANIMATION_SPEED : 1;
     }
     if (surfaceClip) {
       surfaceClip.timeScale = hoverClimb ? HOVER_ANIMATION_SPEED : 1;

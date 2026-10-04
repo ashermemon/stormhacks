@@ -247,21 +247,61 @@ function addOutlinePass(mesh, outlineMat) {
 }
 
 // ---------------------------------------------------------------------------
+// Silhouette-only outlines. A plain inverted hull also draws lines wherever one
+// part of an object overlaps another (head on body, trunk into crown...). Each
+// object stamps its own stencil value where it's drawn, and its outline is only
+// drawn where that value isn't, i.e. outside its own silhouette. Different
+// objects get different values, so outlines still separate overlapping objects.
+// Needs a renderer created with { stencil: true }.
+// ---------------------------------------------------------------------------
+let nextStencilRef = 1;
+
+function takeStencilRef() {
+  const ref = nextStencilRef;
+  nextStencilRef = (nextStencilRef % 255) + 1;
+  return ref;
+}
+
+function stampStencil(mat, ref) {
+  mat.stencilWrite = true;
+  mat.stencilRef = ref;
+  mat.stencilFunc = THREE.AlwaysStencilFunc;
+  mat.stencilZPass = THREE.ReplaceStencilOp;
+  return mat;
+}
+
+function silhouetteOutline(mat, ref) {
+  mat.stencilWrite = true; // enables the stencil test; the ops keep the buffer as is
+  mat.stencilRef = ref;
+  mat.stencilFunc = THREE.NotEqualStencilFunc;
+  mat.stencilFail = THREE.KeepStencilOp;
+  mat.stencilZFail = THREE.KeepStencilOp;
+  mat.stencilZPass = THREE.KeepStencilOp;
+  return mat;
+}
+
+// ---------------------------------------------------------------------------
 // Converting existing materials
 // ---------------------------------------------------------------------------
 const convertCache = new Map();
 
-function toToon(src) {
-  if (!src) return null;
-  if (src.userData && src.userData.isToon) return src;
-  const convertible =
-    src.isMeshStandardMaterial ||
-    src.isMeshPhysicalMaterial ||
-    src.isMeshPhongMaterial ||
-    src.isMeshLambertMaterial ||
-    src.isMeshToonMaterial;
-  if (!convertible) return null;
-  if (convertCache.has(src.uuid)) return convertCache.get(src.uuid);
+function canToon(src) {
+  return Boolean(
+    src &&
+      (src.userData?.isToon ||
+        src.isMeshStandardMaterial ||
+        src.isMeshPhysicalMaterial ||
+        src.isMeshPhongMaterial ||
+        src.isMeshLambertMaterial ||
+        src.isMeshToonMaterial),
+  );
+}
+
+function toToon(src, stencilRef = 0) {
+  if (!canToon(src)) return null;
+  if (src.userData.isToon) return src;
+  const key = `${src.uuid}:${stencilRef}`;
+  if (convertCache.has(key)) return convertCache.get(key);
   const mat = makeToonMaterial({
     map: src.map || null,
     color: src.color || new THREE.Color(1, 1, 1),
@@ -274,22 +314,49 @@ function toToon(src) {
     vertexColors: src.vertexColors,
   });
   mat.name = `${src.name || "material"} (toon)`;
-  convertCache.set(src.uuid, mat);
+  if (stencilRef) stampStencil(mat, stencilRef);
+  convertCache.set(key, mat);
   return mat;
 }
 
+// The child of `root` that `o` belongs to, e.g. a tree group for its trunk mesh.
+function topLevelObject(root, o) {
+  while (o.parent && o.parent !== root) o = o.parent;
+  return o;
+}
+
 export function toonifyScene(root) {
+  // Pass 1: convert materials. Outlined meshes get their top-level object's stencil
+  // value, so e.g. a tree's trunk and crown share one silhouette.
+  const groups = new Map(); // top-level object -> { ref, meshes }
   root.traverse((o) => {
     if (!o.isMesh || o.userData.toon === false || o.userData._toonified) return;
     const list = Array.isArray(o.material) ? o.material : [o.material];
-    const converted = list.map(toToon);
-    if (converted.some((m) => m === null)) return; // unsupported material: leave the mesh as it is
+    if (!list.every(canToon)) return; // unsupported material: leave the mesh as it is
+    const transparent = list.some((m) => m.transparent);
+    const outlined = !o.userData.noOutline && !transparent;
+
+    let group = null;
+    if (outlined) {
+      const top = topLevelObject(root, o);
+      group = groups.get(top);
+      if (!group) {
+        group = { ref: takeStencilRef(), meshes: [] };
+        groups.set(top, group);
+      }
+      group.meshes.push(o);
+    }
+    const converted = list.map((m) => toToon(m, group?.ref));
     o.material = Array.isArray(o.material) ? converted : converted[0];
-    const transparent = converted.some((m) => m.transparent);
-    if (!o.userData.noOutline && !transparent)
-      addOutlinePass(o, outlineMaterial);
     o.userData._toonified = true;
   });
+
+  // Pass 2: outlines. Created after every body material on purpose: three draws
+  // opaque materials in id order, so bodies stamp the stencil before outlines test it.
+  for (const { ref, meshes } of groups.values()) {
+    const outline = silhouetteOutline(makeOutlineMaterial(), ref);
+    for (const mesh of meshes) addOutlinePass(mesh, outline);
+  }
   return root;
 }
 
@@ -311,33 +378,12 @@ function otterMap(textureOrUrl) {
   return otterMaps.get(textureOrUrl);
 }
 
-// Silhouette-only outlines: the otter is built from overlapping parts, so a plain
-// inverted hull also draws lines where the head meets the body, the arms, the tail...
-// Each otter stamps its own stencil value where it's drawn, and its outline is only
-// drawn where that value isn't, i.e. outside its own silhouette. A different value
-// per otter keeps the outline between two overlapping otters.
-// Needs a renderer created with { stencil: true }.
-let nextStencilRef = 1;
-
 export function applyToonStyle(otterRoot, textureOrUrl) {
-  const ref = nextStencilRef;
-  nextStencilRef = (nextStencilRef % 255) + 1;
-
-  const mat = makeToonMaterial({ map: otterMap(textureOrUrl) });
-  mat.stencilWrite = true;
-  mat.stencilRef = ref;
-  mat.stencilFunc = THREE.AlwaysStencilFunc;
-  mat.stencilZPass = THREE.ReplaceStencilOp;
-
+  const ref = takeStencilRef();
+  const mat = stampStencil(makeToonMaterial({ map: otterMap(textureOrUrl) }), ref);
   // Created after `mat` on purpose: three draws opaque materials in id order, so
   // the body stamps the stencil before its outline tests it.
-  const outline = makeOutlineMaterial({ OTTER_MASK: "" });
-  outline.stencilWrite = true; // enables the stencil test; ops below keep the buffer as is
-  outline.stencilRef = ref;
-  outline.stencilFunc = THREE.NotEqualStencilFunc;
-  outline.stencilFail = THREE.KeepStencilOp;
-  outline.stencilZFail = THREE.KeepStencilOp;
-  outline.stencilZPass = THREE.KeepStencilOp;
+  const outline = silhouetteOutline(makeOutlineMaterial({ OTTER_MASK: "" }), ref);
 
   otterRoot.traverse((o) => {
     if (!o.isMesh) return;

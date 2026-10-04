@@ -10,7 +10,7 @@ import { setToonLight, toonifyScene } from "./toonshading.js";
 
 const ARENA_HALF = 20;
 const AVATAR = { w: 1, h: 1, d: 1 };
-const SPEED = 5.5;
+const SPEED = 4;
 const SURFACE_SWIM_SPEED = 2.5;
 const FLOAT_SWIM_SPEED = 0.8; // drifting on his back during the SwimSurface float
 const UNDERWATER_SWIM_SPEED = 3;
@@ -120,7 +120,8 @@ export async function startGame() {
   canvas.addEventListener("click", lockPointer);
   lockPointer(); // may work straight away thanks to the Play button click
   window.addEventListener("mousemove", (e) => {
-    if (document.pointerLockElement === canvas) cameraYaw -= e.movementX * MOUSE_SENSITIVITY;
+    if (document.pointerLockElement === canvas)
+      cameraYaw -= e.movementX * MOUSE_SENSITIVITY;
   });
 
   let sendTimer = 0;
@@ -137,11 +138,12 @@ export async function startGame() {
       [player.x + halfWidth, player.z + halfDepth],
     ];
 
-    return footprintPoints.some(([x, z]) =>
-      x >= -ARENA_HALF &&
-      x <= ARENA_HALF &&
-      z >= -ARENA_HALF &&
-      z <= ARENA_HALF,
+    return footprintPoints.some(
+      ([x, z]) =>
+        x >= -ARENA_HALF &&
+        x <= ARENA_HALF &&
+        z >= -ARENA_HALF &&
+        z <= ARENA_HALF,
     );
   };
   let previousPlayerPosition = {
