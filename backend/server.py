@@ -49,6 +49,61 @@ HAT_PRICES = {
 }
 
 
+def welcome_payload(pid, name, token, trinket_store):
+    return {
+        "type": "welcome",
+        "id": pid,
+        "name": name,
+        "token": token,
+        "players": {i: s for i, s in states.items() if i != pid},
+        "names": {i: n for i, n in names.items() if i != pid},
+        "trinkets": world.snapshot(),
+        "journal": trinket_store.journal(pid),
+        "hats": trinket_store.get_hats(pid),
+        "trinketCatalog": TrinketWorld.catalog(),
+    }
+
+
+def handle_hat_purchase(pid, hat_id, trinket_store):
+    price = HAT_PRICES.get(hat_id)
+
+    if price is None:
+        return {
+            "type": "hat_purchase",
+            "ok": False,
+            "hat": hat_id,
+            "message": "Unknown hat.",
+            "hats": trinket_store.get_hats(pid),
+        }
+
+    journal = trinket_store.journal(pid)
+    shells = trinket_store.spend_shells(pid, price)
+
+    if shells is None:
+        return {
+            "type": "hat_purchase",
+            "ok": False,
+            "hat": hat_id,
+            "price": price,
+            "shells": journal["shells"],
+            "journal": journal,
+            "hats": trinket_store.get_hats(pid),
+            "message": "Not enough shells.",
+        }
+
+    trinket_store.add_hat(pid, hat_id)
+    hats = trinket_store.get_hats(pid)
+
+    return {
+        "type": "hat_purchase",
+        "ok": True,
+        "hat": hat_id,
+        "price": price,
+        "shells": shells,
+        "journal": trinket_store.journal(pid),
+        "hats": hats,
+    }
+
 
 def http_response(status, body, content_type="text/plain; charset=utf-8", extra=None):
     headers = Headers(
@@ -147,20 +202,7 @@ async def handler(ws):
         if old is not None:
             await old.close(4000, "Signed in from another tab")
 
-        await send(
-            ws,
-            {
-                "type": "welcome",
-                "id": pid,
-                "name": name,
-                "token": token,
-                "players": {i: s for i, s in states.items() if i != pid},
-                "names": {i: n for i, n in names.items() if i != pid},
-                "trinkets": world.snapshot(),
-                "journal": trinket_store.journal(pid),
-                "trinketCatalog": TrinketWorld.catalog(),
-            },
-        )
+        await send(ws, welcome_payload(pid, name, token, trinket_store))
         if old is None:
             await broadcast({"type": "join", "id": pid, "name": name}, exclude=pid)
         elif old_name != name:
@@ -237,58 +279,8 @@ async def handler(ws):
                 await send(ws, {"type": "trinket_spawn", "trinket": replacement})
             elif kind == "hat_purchase":
                 hat_id = msg.get("hat")
-                price = HAT_PRICES.get(hat_id)
-
-                if price is None:
-                    await send(
-                        ws,
-                        {
-                            "type": "hat_purchase",
-                            "ok": False,
-                            "hat": hat_id,
-                            "message": "Unknown hat.",
-                        },
-                    )
-                    continue
-
-                print(
-                    "HAT PURCHASE:",
-                    "pid=", pid,
-                    "hat=", hat_id,
-                    "price=", price,
-                    "journal=", trinket_store.journal(pid),
-                )
-                shells = trinket_store.spend_shells(
-                    pid,
-                    price,
-                )
-
-                if shells is None:
-                    journal = trinket_store.journal(pid)
-                    await send(
-                        ws,
-                        {
-                            "type": "hat_purchase",
-                            "ok": False,
-                            "hat": hat_id,
-                            "price": price,
-                            "shells": journal["shells"],
-                            "message": "Not enough shells.",
-                        },
-                    )
-                    continue
-
-                await send(
-                    ws,
-                    {
-                        "type": "hat_purchase",
-                        "ok": True,
-                        "hat": hat_id,
-                        "price": price,
-                        "shells": shells,
-                        "journal": trinket_store.journal(pid),
-                    },
-                )
+                result = handle_hat_purchase(pid, hat_id, trinket_store)
+                await send(ws, result)
 
     finally:
         # A replaced session must not clean up the identity's newer session.
