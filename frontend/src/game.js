@@ -3,6 +3,7 @@ import { connect } from "./net.js";
 import { keys } from "./input.js";
 import { createAquaticArea } from "./water.js";
 import { createEnvironment } from "./environment.js";
+import { SUN_DIRECTION } from "./atmosphere.js";
 import { loadWorld } from "./world.js";
 import { applyToonWater, updateWater } from "./watershader.js";
 import { Character, OTTER_COLORS } from "./character.js";
@@ -47,7 +48,7 @@ function lerpAngle(a, b, t) {
 
 export async function startGame() {
   const scene = new THREE.Scene();
-  createEnvironment(scene);
+  const environment = createEnvironment(scene);
   const world = await loadWorld();
   const { getGroundHeight } = world;
   applyToonWater(world.root);
@@ -61,7 +62,7 @@ export async function startGame() {
     70,
     window.innerWidth / window.innerHeight,
     0.1,
-    500, // well past the 250 the mountain ring needs
+    600, // past the mountain ring and the farthest clouds
   );
 
   const renderer = new THREE.WebGLRenderer({
@@ -91,7 +92,7 @@ export async function startGame() {
   };
 
   // Cel-shade everything built so far (the water keeps its own shader); otters are styled in Character.
-  setToonLight(-25, 35, 12); // match the sun in environment.js
+  setToonLight(SUN_DIRECTION.x, SUN_DIRECTION.y, SUN_DIRECTION.z); // the sun in the sky
   toonifyScene(scene);
 
   // Remote players.
@@ -281,6 +282,7 @@ export async function startGame() {
     );
     camera.lookAt(player.x, player.y + AVATAR_HEIGHT, player.z);
     scenery.update(camera);
+    environment.update(camera, clock.elapsedTime);
     trinkets.update(dt, player, camera);
 
     // Network.

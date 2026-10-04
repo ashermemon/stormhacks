@@ -1,0 +1,15 @@
+<!doctype html><html><head><meta charset="UTF-8"><style>body{margin:0}</style></head><body><script type="module">
+import * as THREE from "three";
+import { createEnvironment } from "/src/environment.js";
+import { SUN_DIRECTION } from "/src/atmosphere.js";
+const scene = new THREE.Scene();
+const env = createEnvironment(scene);
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 600);
+camera.position.set(12, 6, 5);
+const q = new URLSearchParams(location.search);
+const t = q.get("look") === "sun" ? SUN_DIRECTION.clone().multiplyScalar(100).add(camera.position) : new THREE.Vector3(12 + 100, 6 + Number(q.get("up") ?? 20), 5);
+camera.lookAt(t);
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(innerWidth, innerHeight); document.body.appendChild(r.domElement);
+let f = 0; r.setAnimationLoop(() => { env.update(camera, 0); r.render(scene, camera); if (++f === 60) console.log("PREVIEW clouds=" + (scene.getObjectByName("clouds")?.children.length ?? 0)); });
+window.onerror = (e) => console.log("PREVIEW ERROR", e);
+</script></body></html>

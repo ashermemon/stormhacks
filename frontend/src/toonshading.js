@@ -37,6 +37,16 @@
 // same regardless of the lights you add. Lights don't need to be removed; they're ignored.
 
 import * as THREE from "three";
+import { atmosphereGlsl, atmosphereUniforms } from "./atmosphere.js";
+
+// World position of the vertex, for the distance haze (atmosphere.js).
+const atmoWorldVertex = /* glsl */ `
+    vec4 atmoWorld = vec4(transformed, 1.0);
+    #ifdef USE_INSTANCING
+      atmoWorld = instanceMatrix * atmoWorld;
+    #endif
+    vAtmoWorld = (modelMatrix * atmoWorld).xyz;
+`;
 
 // ---------------------------------------------------------------------------
 // Shared settings: tweak once, every toon material in the scene updates.
@@ -86,6 +96,7 @@ const toonVert = /* glsl */ `
   #include <skinning_pars_vertex>
   varying vec2 vUv;
   varying vec3 vNormalW;
+  varying vec3 vAtmoWorld;
   #ifdef WIND_STRENGTH
     uniform float windTime;
     uniform vec2 windDir;
@@ -121,6 +132,7 @@ const toonVert = /* glsl */ `
     #ifdef CLIP_BELOW_Y
       vWorldY = (modelMatrix * vec4(transformed, 1.0)).y;
     #endif
+    ${atmoWorldVertex}
     vNormalW = normalize(mat3(modelMatrix) * objectNormal);
   }
 `;
@@ -137,6 +149,8 @@ const toonFrag = /* glsl */ `
   uniform float threshold;
   uniform float softness;
   #include <color_pars_fragment>
+  ${atmosphereGlsl}
+  varying vec3 vAtmoWorld;
   varying vec2 vUv;
   varying vec3 vNormalW;
   void main() {
@@ -156,7 +170,8 @@ const toonFrag = /* glsl */ `
       if (!gl_FrontFacing) n = -n;             // correct shading on double-sided faces
     #endif
     float lit = smoothstep(threshold - softness, threshold + softness, dot(n, lightDir));
-    gl_FragColor = vec4(mix(base.rgb * shadowTint, base.rgb, lit) + emissive, base.a);
+    vec3 shaded = mix(base.rgb * shadowTint, base.rgb, lit) + emissive;
+    gl_FragColor = vec4(atmosphere(shaded, vAtmoWorld), base.a);
     #include <colorspace_fragment>
   }
 `;
@@ -185,6 +200,7 @@ function makeToonMaterial({
       opacity: { value: opacity },
       map: { value: map },
       ...toonUniforms, // shared objects, so tweaking toonUniforms updates everything
+      ...atmosphereUniforms,
       ...(wind > 0 ? windUniforms : {}),
     },
     defines,
@@ -212,6 +228,7 @@ const outlineVert = /* glsl */ `
     varying float vWorldY;
   #endif
   uniform float depthPush;
+  varying vec3 vAtmoWorld;
   void main() {
     float w = 1.0;
     #ifdef OTTER_MASK
@@ -233,6 +250,7 @@ const outlineVert = /* glsl */ `
     #include <begin_vertex>
     #include <skinning_vertex>
     #include <project_vertex>
+    ${atmoWorldVertex}
 
     // Shove the hull away from the camera so it can only show past the silhouette,
     // never through creases (armpits, ear bumps, where parts meet).
@@ -249,6 +267,8 @@ const outlineVert = /* glsl */ `
 
 const outlineFrag = /* glsl */ `
   uniform vec3 color;
+  ${atmosphereGlsl}
+  varying vec3 vAtmoWorld;
   #ifdef CLIP_BELOW_Y
     varying float vWorldY;
   #endif
@@ -256,7 +276,7 @@ const outlineFrag = /* glsl */ `
     #ifdef CLIP_BELOW_Y
       if (vWorldY < CLIP_BELOW_Y) discard; // no ink under the water surface
     #endif
-    gl_FragColor = vec4(color, 1.0);
+    gl_FragColor = vec4(atmosphere(color, vAtmoWorld), 1.0); // far ink fades into the haze
     #include <colorspace_fragment>
   }
 `;
@@ -267,7 +287,7 @@ const UNDERWATER_CLIP = { CLIP_BELOW_Y: "-0.02" };
 
 function makeOutlineMaterial(defines = {}) {
   return new THREE.ShaderMaterial({
-    uniforms: { ...outlineUniforms },
+    uniforms: { ...outlineUniforms, ...atmosphereUniforms },
     defines,
     vertexShader: outlineVert,
     fragmentShader: outlineFrag,

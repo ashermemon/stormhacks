@@ -15,6 +15,7 @@
 //   R = depth below the surface, G/B = flow direction, A = flow speed.
 
 import * as THREE from "three";
+import { atmosphereGlsl, atmosphereUniforms } from "./atmosphere.js";
 
 // Tweak these at runtime, every water mesh updates.
 export const waterUniforms = {
@@ -72,6 +73,7 @@ const frag = /* glsl */ `
   uniform float patchStrength;
   uniform float streakStrength;
   uniform float detailFade;
+  ${atmosphereGlsl}
   varying vec2 vWorld;
   varying float vDepth;
   varying vec2 vFlow;
@@ -146,13 +148,13 @@ const frag = /* glsl */ `
     col = mix(col, lightColor, 1.0 - aastep(foamWidth * 2.2 + wob, vDepth));
     col = mix(col, foamColor,  1.0 - aastep(foamWidth + wob, vDepth));
 
-    gl_FragColor = vec4(col, opacity);
+    gl_FragColor = vec4(atmosphere(col, vec3(vWorld.x, 0.0, vWorld.y)), opacity);
     #include <colorspace_fragment>
   }
 `;
 
 export const waterMaterial = new THREE.ShaderMaterial({
-  uniforms: waterUniforms,
+  uniforms: { ...waterUniforms, ...atmosphereUniforms },
   vertexShader: vert,
   fragmentShader: frag,
   transparent: true,
