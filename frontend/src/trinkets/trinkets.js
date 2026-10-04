@@ -114,7 +114,15 @@ function pawTransform(character, outPos, outQuat) {
   return outPos;
 }
 
-export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJournalToggle }) {
+export function createTrinkets({
+  scene,
+  net,
+  zones,
+  getCharacter,
+  swimState,
+  onJournalToggle,
+  onShopToggle = onJournalToggle,
+}) {
   const trinkets = new Map(); // id -> see addTrinket()
   const particles = [];
   const glintTexture = makeGlintTexture();
@@ -135,91 +143,85 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   const ring = rhythm.querySelector(".ring");
   const pips = rhythm.querySelector(".pips");
   const gradeText = rhythm.querySelector(".grade");
-  
+
   let wardrobe = null;
-
-  function toggleWardrobe() {
-    const character =
-      getCharacter(net.id);
-
-    if (!character) {
-      console.warn(
-        "Cannot open wardrobe: character is not loaded.",
-      );
-
-      return;
-    }
   let pendingHatPurchase = null;
 
-  net.on(
-    "hat_purchase",
-    (message) => {
-      if (!pendingHatPurchase) {
-        return;
+  net.on("hat_purchase", (message) => {
+    if (!pendingHatPurchase) {
+      return;
+    }
+
+    const pending = pendingHatPurchase;
+    pendingHatPurchase = null;
+
+    if (message.ok) {
+      if (message.journal) {
+        journal.update(message.journal);
       }
 
-      const pending =
-        pendingHatPurchase;
-
-      pendingHatPurchase = null;
-
-      if (message.ok) {
-        if (message.journal) {
-          journal.update(
-            message.journal,
-          );
-        }
-
-        if (
-          message.shells !== undefined
-        ) {
-          setShells(message.shells);
-        }
-      } else {
-        flash(
-          toast,
-          message.message ||
-            "Hat purchase failed.",
-          "bad",
-        );
+      if (message.shells !== undefined) {
+        setShells(message.shells);
       }
-
-      pending.resolve(
-        message.ok === true,
+    } else {
+      flash(
+        toast,
+        message.message || "Hat purchase failed.",
+        "bad",
       );
-    },
-  );
+    }
+
+    pending.resolve(message.ok === true);
+  });
 
   function purchaseHat(hatId) {
     if (pendingHatPurchase) {
       return Promise.resolve(false);
     }
 
-    return new Promise(
-      (resolve) => {
-        pendingHatPurchase = {
-          resolve,
-        };
+    return new Promise((resolve) => {
+      pendingHatPurchase = {
+        resolve,
+      };
 
-        net.send({
-          type: "hat_purchase",
-          hat: hatId,
-        });
-      },
-    );
-  }
-  if (!wardrobe) {
-    wardrobe = createWardrobe(
-      character,
-      journal,
-      () => {
-        // Existing toggle handling, if needed.
-      },
-      purchaseHat,
-    );
+      net.send({
+        type: "hat_purchase",
+        hat: hatId,
+      });
+    });
   }
 
-    wardrobe.toggle();
+  function getWardrobe() {
+    if (!wardrobe) {
+      const character = getCharacter(net.id);
+      if (!character) return null;
+      wardrobe = createWardrobe(
+        character,
+        journal,
+        (open) => {
+          onShopToggle?.(open);
+        },
+        purchaseHat,
+      );
+    }
+    return wardrobe;
+  }
+
+  function toggleWardrobe() {
+    const character = getCharacter(net.id);
+    if (!character) {
+      console.warn("Cannot open wardrobe: character is not loaded.");
+      return;
+    }
+
+    const w = getWardrobe();
+    if (!w) return;
+
+    if (!w.isOpen() && journal.isOpen()) {
+      journal.toggle(false);
+    }
+
+    w.toggle();
   }
 
 
@@ -554,12 +556,25 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
 
   window.addEventListener("keydown", (e) => {
     if (e.target instanceof HTMLInputElement || e.repeat) return;
-    if (e.code === "KeyJ") journal.toggle();
-    if (e.code === "Escape" && crack) {
-      if (crack.beats || crack.pending || crack.waiting || crack.turning) {
-        if (!crack.turning) net.send({ type: "trinket_crack_cancel" });
+    if (e.code === "KeyJ") {
+      if (wardrobe?.isOpen()) wardrobe.close();
+      journal.toggle();
+    }
+    if (e.code === "Escape") {
+      if (wardrobe?.isOpen()) {
+        wardrobe.close();
+        return;
       }
-      endCrack();
+      if (journal.isOpen()) {
+        journal.toggle(false);
+        return;
+      }
+      if (crack) {
+        if (crack.beats || crack.pending || crack.waiting || crack.turning) {
+          if (!crack.turning) net.send({ type: "trinket_crack_cancel" });
+        }
+        endCrack();
+      }
     }
     if (e.code === "KeyF") pressAction();
     if (e.code === "KeyH") toggleWardrobe();
@@ -588,8 +603,14 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
     busy: () => crack !== null,
     pressAction,
     releaseAction,
-    toggleJournal: () => journal.toggle(),
+    toggleJournal: () => {
+      if (wardrobe?.isOpen()) wardrobe.close();
+      journal.toggle();
+    },
     toggleWardrobe,
+    isJournalOpen: () => journal.isOpen(),
+    isWardrobeOpen: () => wardrobe?.isOpen() ?? false,
+    isUIOpen: () => journal.isOpen() || (wardrobe?.isOpen() ?? false),
 
     update(dt, currentPlayer, camera) {
       player = currentPlayer;

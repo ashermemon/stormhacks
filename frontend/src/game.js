@@ -116,9 +116,13 @@ export async function startGame(view) {
   const { getGroundHeight } = world;
   const canvas = renderer.domElement;
   const lockPointer = () => canvas.requestPointerLock()?.catch?.(() => {});
-  const handleJournalToggle = (isOpen) => {
-    if (isOpen) document.exitPointerLock();
-    else if (!document.body.classList.contains("has-mobile-controls")) lockPointer();
+  let trinkets = null;
+  const handleUIToggle = (isOpen) => {
+    if (isOpen) {
+      if (document.pointerLockElement) document.exitPointerLock();
+    } else if (!trinkets?.isUIOpen?.() && !document.body.classList.contains("has-mobile-controls")) {
+      lockPointer();
+    }
   };
 
   // Remote players.
@@ -194,13 +198,14 @@ export async function startGame(view) {
 
   const chat = createChat({ net, camera, getCharacter: characterOf });
 
-  const trinkets = createTrinkets({
+  trinkets = createTrinkets({
     scene,
     net,
     zones,
     getCharacter: characterOf,
     swimState: aquatic.swimState,
-    onJournalToggle: handleJournalToggle,
+    onJournalToggle: handleUIToggle,
+    onShopToggle: handleUIToggle,
   });
 
   let cameraYaw = 0;
@@ -226,7 +231,10 @@ export async function startGame(view) {
   });
 
   if (!mobile) {
-    canvas.addEventListener("click", lockPointer);
+    canvas.addEventListener("click", () => {
+      if (trinkets?.isUIOpen?.()) return;
+      lockPointer();
+    });
     lockPointer(); // may work straight away thanks to the Play button click
   }
   window.addEventListener("mousemove", (e) => {

@@ -57,6 +57,12 @@ export function createWardrobe(
     () => toggle(false),
   );
 
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "Escape" && !wardrobe.hidden) {
+      toggle(false);
+    }
+  });
+
   function getShells() {
     return journal?.getShells?.() ?? 0;
   }
@@ -277,6 +283,10 @@ export function createWardrobe(
         character.getHatId();
 
       render();
+
+      if (document.pointerLockElement) {
+        document.exitPointerLock();
+      }
     }
 
     onToggle?.(open);
@@ -289,6 +299,7 @@ export function createWardrobe(
 
     open() {
       toggle(true);
+      
     },
 
     close() {
