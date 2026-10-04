@@ -146,3 +146,12 @@
   70% { transform: scale(0.9) rotate(3deg); opacity: 1; }
   100% { transform: scale(1); }
 }
+#fThing{
+  position: relative;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 48px;
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
+}

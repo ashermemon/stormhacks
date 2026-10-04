@@ -91,7 +91,7 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState }) {
 
   const prompt = div("trinket-prompt");
   const toast = div("trinket-toast");
-  const rhythm = div("trinket-rhythm", `<div class="pips"></div><div class="target"></div><div class="ring"></div><div class="grade"></div>`);
+  const rhythm = div("trinket-rhythm", `<div class="pips"></div><div class="target"></div><span class="fThing">Press F to crack!</span><div class="ring"></div><div class="grade"></div>`);
   const card = div("trinket-reveal");
   const ring = rhythm.querySelector(".ring");
   const pips = rhythm.querySelector(".pips");
