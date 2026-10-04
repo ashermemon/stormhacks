@@ -1,4 +1,5 @@
 import hatUrl from "../assets/models/character/Hat.glb?url";
+import wizardHatUrl from "../assets/models/character/WizardHat.glb?url";
 
 const HATS = [
   {
@@ -11,6 +12,12 @@ const HATS = [
     id: "hat",
     name: "Hat",
     file: hatUrl,
+    preview: "🎩",
+  },
+  {
+    id: "wizardHat",
+    name: "Wizard Hat",
+    file: wizardHatUrl,
     preview: "🎩",
   },
 ];

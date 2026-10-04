@@ -5,6 +5,7 @@ import otterUrl from "../assets/models/character/Otter.glb?url";
 import { createNametag, disposeNametag } from "./nametags.js";
 import { applyToonStyle } from "./toonshading.js";
 import hatUrl from "../assets/models/character/Hat.glb?url";
+import wizardHatUrl from "../assets/models/character/WizardHat.glb?url";
 
 const NAMETAG_GAP = 0.4;
 const MODEL_SCALE = 1.8;
@@ -60,12 +61,14 @@ let hatPromise = null;
 
 function loadHatGltf() {
   hatPromise ??= loader.loadAsync(hatUrl);
+  hatPromise ??= loader.loadAsync(wizardHatUrl);
   return hatPromise;
 }
 
 export const HAT_FILES = {
   none: null,
   hat: hatUrl,
+  wizardHat: wizardHatUrl,
 };
 const textureCache = new Map();
 
