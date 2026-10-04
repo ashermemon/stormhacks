@@ -53,7 +53,11 @@ function lerpAngle(a, b, t) {
   return a + diff * t;
 }
 
-export async function startGame() {
+/**
+ * Builds everything that doesn't need the server: sky, terrain, water, scenery and fish,
+ * plus the renderer. The menu shows it behind itself (menuTour.js) until Play.
+ */
+export async function loadScene() {
   const scene = new THREE.Scene();
   const environment = createEnvironment(scene);
   const world = await loadWorld();
@@ -91,15 +95,22 @@ export async function startGame() {
   const zones = collectSpawnZones(world.root);
   const fish = createFish(scene, 12, { getGroundHeight, zones });
 
+  // Cel-shade everything built so far (the water keeps its own shader); otters are styled in Character.
+  toonifyScene(scene);
+
+  return { scene, environment, world, scenery, camera, renderer, aquatic, zones, fish };
+}
+
+/** Connects and starts playing in a scene from loadScene(). */
+export async function startGame(view) {
+  const { scene, environment, world, scenery, camera, renderer, aquatic, zones, fish } = view;
+  const { getGroundHeight } = world;
   const canvas = renderer.domElement;
   const lockPointer = () => canvas.requestPointerLock()?.catch?.(() => {});
   const handleJournalToggle = (isOpen) => {
     if (isOpen) document.exitPointerLock();
     else if (!document.body.classList.contains("has-mobile-controls")) lockPointer();
   };
-
-  // Cel-shade everything built so far (the water keeps its own shader); otters are styled in Character.
-  toonifyScene(scene);
 
   // Remote players.
   const remotes = new Map(); // id -> { character, target: {x,y,z,ry} }

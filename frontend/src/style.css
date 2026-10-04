@@ -18,17 +18,101 @@ canvas {
   display: block;
 }
 
+/* ---- Main menu ------------------------------------------------------------
+   Layers, back to front: the world canvas (menuTour.js), black until the world has
+   loaded (then fades away), the dip-to-dark between camera shots, a soft vignette, the
+   cover that fades in on Play, then the title and card. */
 #menu {
   position: fixed;
   inset: 0;
+  z-index: 20000;
+  color: #fff;
+  transition: opacity 0.9s ease;
+}
+#menu.leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+#menu > div {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.menu-backdrop {
+  background: #000;
+  transition: opacity 1.2s ease;
+}
+#menu.ready .menu-backdrop {
+  opacity: 0;
+}
+#menu-fade {
+  background: #0d1726;
+  opacity: 0;
+}
+/* Darkens the background shots so the title and controls stand out. */
+.menu-vignette {
+  background:
+    radial-gradient(ellipse at center, transparent 45%, rgba(10, 20, 35, 0.45) 100%),
+    linear-gradient(transparent 55%, rgba(10, 20, 35, 0.35)),
+    rgba(10, 20, 35, 0.3);
+}
+#menu-cover {
+  background: #0d1726;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+#menu.covering #menu-cover {
+  opacity: 1;
+}
+
+.menu-content {
+  position: relative;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  color: #fff;
+  gap: 10px;
+  padding: 16px;
+  box-sizing: border-box;
 }
-#username{
+.menu-title {
+  margin: 0;
+  font-size: clamp(40px, 9vw, 84px);
+  font-weight: normal;
+  letter-spacing: 2px;
+  text-align: center;
+  color: #fffaf0;
+  text-shadow:
+    0 4px 0 #2f6a8a,
+    0 10px 28px rgba(0, 0, 0, 0.35);
+  user-select: none;
+  animation: menu-bob 4s ease-in-out infinite;
+}
+@keyframes menu-bob {
+  50% {
+    transform: translateY(-6px);
+  }
+}
+.menu-tagline {
+  margin: 0 0 22px;
+  font-size: 16px;
+  letter-spacing: 1px;
+  opacity: 0.92;
+  text-align: center;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+/* The name field and Play button keep the original plain style. */
+.menu-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.menu-card label {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+#username {
   width: 240px;
   padding: 14px 0;
   font-size: 20px;
@@ -38,14 +122,7 @@ canvas {
   border-radius: 8px;
   color: #fff;
 }
-#menu h1 {
-  margin: 0 0 24px;
-  font-size: 56px;
-  letter-spacing: 2px;
-  user-select: none;
-}
-
-#menu button {
+#play-btn {
   width: 240px;
   padding: 14px 0;
   font-size: 20px;
@@ -56,19 +133,19 @@ canvas {
   border-radius: 8px;
   cursor: pointer;
 }
-
-#menu button:hover {
+#play-btn:hover {
   background: rgba(255, 255, 255, 0.25);
 }
-
-#menu #status {
-  margin: 0;
-  min-height: 1.2em;
-}
-
-#menu button:disabled {
+#play-btn:disabled {
   opacity: 0.5;
   cursor: default;
+}
+#status {
+  margin: 0;
+  min-height: 1.2em;
+  font-size: 14px;
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 body {

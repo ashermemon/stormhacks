@@ -11,17 +11,28 @@
   </head>
   <body>
     <div id="menu">
-      <h1>Otter Nonsense</h1>
-      <label for="username">Username:</label>
-      <input
-        type="text"
-        id="username"
-        name="username"
-        maxlength="16"
-        autocomplete="off"
-      />
-      <button id="play-btn">Play</button>
-      <p id="status"></p>
+      <!-- Behind the menu: the world itself, on a slow camera tour (menuTour.js). -->
+      <div class="menu-backdrop"></div>
+      <div id="menu-fade"></div>
+      <div class="menu-vignette"></div>
+      <div id="menu-cover"></div>
+
+      <main class="menu-content">
+        <h1 class="menu-title">Otter Nonsense</h1>
+        <p class="menu-tagline">dive for treasure · crack it open · hang out</p>
+        <div class="menu-card">
+          <label for="username">Username:</label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            maxlength="16"
+            autocomplete="off"
+          />
+          <button id="play-btn">Play</button>
+          <p id="status"></p>
+        </div>
+      </main>
     </div>
 
     <script type="module" src="/src/main.js"></script>
