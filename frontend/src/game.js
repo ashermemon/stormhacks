@@ -15,6 +15,7 @@ import { createFish } from "./fish.js";
 import { createTrinkets } from "./trinkets/trinkets.js";
 import { collectSpawnZones } from "./trinkets/spawnZones.js";
 import { createMobileControls } from "./mobile.js";
+import { HAT_FILES } from "./character.js";
 
 const AVATAR_HEIGHT = 1; // where the camera looks, above the otter's feet
 const SPAWN = { x: 12, z: 5 }; // a meadow spot
@@ -119,6 +120,16 @@ export async function startGame() {
       remote.character.root.position.set(state.x, state.y, state.z);
       remote.character.root.rotation.y = state.ry;
       remote.character.setPose(pose);
+    }
+    const hatId = state.hat ?? "none";
+
+    if (remote.hatId !== hatId) {
+      remote.hatId = hatId;
+
+      remote.character.setHat(
+        HAT_FILES[hatId] ?? null,
+        hatId,
+      );
     }
   }
 
@@ -348,7 +359,7 @@ export async function startGame() {
     }
     if (sendTimer >= SEND_INTERVAL) {
       sendTimer = 0;
-      net.sendState({ x: player.x, y: player.y, z: player.z, ry: player.ry, pose: seating.pose() });
+      net.sendState({ x: player.x, y: player.y, z: player.z, ry: player.ry, pose: seating.pose(), hat: me.getHatId() });
     }
 
     renderer.render(scene, camera);

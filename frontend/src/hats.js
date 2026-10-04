@@ -2,11 +2,13 @@ import hatUrl from "../assets/models/character/Hat.glb?url";
 
 const HATS = [
   {
+    id: "none",
     name: "No Hat",
     file: null,
     preview: "—",
   },
   {
+    id: "hat",
     name: "Hat",
     file: hatUrl,
     preview: "🎩",
@@ -17,7 +19,7 @@ export function createWardrobe(
   character,
   onToggle,
 ) {
-  let selected = null;
+  let selected = character.getHatId();
 
   const backdrop =
     document.createElement("div");
@@ -63,7 +65,7 @@ export function createWardrobe(
           ${HATS.map((hat, index) => `
             <button
               class="hat-card${
-                selected === hat.file
+                selected === hat.id
                   ? " selected"
                   : ""
               }"
@@ -110,17 +112,16 @@ export function createWardrobe(
       });
   }
 
-  async function selectHat(hat) {
-    if (hat.file) {
-      await character.setHat(hat.file);
-      selected = hat.file;
-    } else {
-      character.removeHat();
-      selected = null;
-    }
-
-    render();
+async function selectHat(hat) {
+  if (hat.file) {
+    await character.setHat(hat.file, hat.id);
+  } else {
+    character.removeHat();
   }
+
+  selected = hat.id;
+  render();
+}
 
   function toggle(
     open = wardrobe.hidden,
