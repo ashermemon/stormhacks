@@ -59,6 +59,9 @@ export function connect(handlers) {
             name: msg.name,
             players: msg.players,
             names: msg.names,
+            trinkets: msg.trinkets,
+            journal: msg.journal,
+            trinketCatalog: msg.trinketCatalog,
             /** Subscribe to any server message type (chat, join, leave, renamed, error, ...). */
             on(type, fn) {
               if (!listeners.has(type)) listeners.set(type, []);
@@ -73,6 +76,8 @@ export function connect(handlers) {
             rename(name) {
               send({ type: 'rename', name });
             },
+            /** Send any message the server understands (trinket_grab, ...). */
+            send,
           });
           break;
         case 'state':

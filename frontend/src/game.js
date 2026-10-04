@@ -1,12 +1,14 @@
 import * as THREE from "three";
 import { connect } from "./net.js";
 import { keys } from "./input.js";
-import { createAquaticArea, WATER_BOTTOM } from "./water.js";
+import { createAquaticArea, WATER_BOTTOM, WATER_WIDTH } from "./water.js";
 import { createEnvironment, collideWithGround } from "./environment.js";
 import { Character, OTTER_COLORS } from "./character.js";
 import { createChat } from "./chat.js";
 import { trackNames } from "./names.js";
 import { setToonLight, toonifyScene } from "./toonshading.js";
+import { createTrinkets } from "./trinkets/trinkets.js";
+import { collectSpawnZones, createStandInZone } from "./trinkets/spawnZones.js";
 
 const ARENA_HALF = 20;
 const AVATAR = { w: 1, h: 1, d: 1 };
@@ -113,6 +115,21 @@ export async function startGame() {
 
   const chat = createChat({ net, camera, getCharacter: characterOf });
 
+  // Trinkets lie on the spawn-zone meshes. When World.glb lands, swap the stand-in for
+  // collectSpawnZones(worldGltf.scene); nothing else changes.
+  createStandInZone(scene, {
+    floorY: WATER_BOTTOM - 0.1,
+    width: WATER_WIDTH - 1,
+    length: (ARENA_HALF - 1) * 2,
+  });
+  const trinkets = createTrinkets({
+    scene,
+    net,
+    zones: collectSpawnZones(scene),
+    getCharacter: characterOf,
+    swimState: aquatic.swimState,
+  });
+
   let cameraYaw = 0;
   // Mouse look: click the game to lock the cursor, then just move the mouse. Esc releases it.
   const canvas = renderer.domElement;
@@ -158,7 +175,9 @@ export async function startGame() {
     cameraYaw += keys.orbit() * ORBIT_SPEED * dt;
 
     // Movement relative to camera heading.
-    const { forward, right } = keys.axes();
+    // Cracking a trinket holds the otter still.
+    const busy = trinkets.busy();
+    const { forward, right } = busy ? { forward: 0, right: 0 } : keys.axes();
     const fx = -Math.sin(cameraYaw);
     const fz = -Math.cos(cameraYaw);
     const rx = Math.cos(cameraYaw);
@@ -197,9 +216,9 @@ export async function startGame() {
     aquatic.stepPhysics(
       player,
       {
-        jumpDown: keys.jump(),
-        dive: keys.dive(),
-        rise: keys.rise(),
+        jumpDown: !busy && keys.jump(),
+        dive: !busy && keys.dive(),
+        rise: !busy && keys.rise(),
       },
       dt,
       isOverArenaFloor(),
@@ -218,6 +237,7 @@ export async function startGame() {
       player.z + Math.cos(cameraYaw) * CAMERA_DISTANCE,
     );
     camera.lookAt(player.x, player.y + AVATAR.h, player.z);
+    trinkets.update(dt, player, camera);
 
     // Network.
     sendTimer += dt;

@@ -23,6 +23,7 @@ from websockets.http11 import Response
 
 from chat import RateLimiter, clean_message
 from identity import IdentityError, IdentityStore
+from trinkets import TrinketStore, TrinketWorld
 
 PORT = int(os.environ.get("PORT", "8765"))
 STATIC_DIR = Path(
@@ -38,6 +39,8 @@ players = {}  # id -> websocket
 states = {}  # id -> last state
 names = {}  # id -> display name
 store = IdentityStore()
+trinket_store = TrinketStore()
+world = TrinketWorld(trinket_store)
 
 
 def http_response(status, body, content_type="text/plain; charset=utf-8", extra=None):
@@ -133,6 +136,9 @@ async def handler(ws):
                 "token": token,
                 "players": {i: s for i, s in states.items() if i != pid},
                 "names": {i: n for i, n in names.items() if i != pid},
+                "trinkets": world.snapshot(),
+                "journal": trinket_store.journal(pid),
+                "trinketCatalog": TrinketWorld.catalog(),
             },
         )
         if old is None:
@@ -178,6 +184,34 @@ async def handler(ws):
                     continue
                 names[pid] = new_name
                 await broadcast({"type": "renamed", "id": pid, "name": new_name})
+
+            elif kind == "trinket_grab":
+                trinket = world.grab(pid, msg.get("id"))
+                if trinket is None:
+                    await send(ws, {"type": "trinket_denied", "id": msg.get("id")})
+                    continue
+                await broadcast({"type": "trinket_taken", "trinket": trinket, "by": pid})
+
+            elif kind == "trinket_crack_begin":
+                crack = world.begin_crack(pid)
+                if crack is not None:
+                    await send(ws, {"type": "trinket_crack_begin", **crack})
+
+            elif kind == "trinket_crack_cancel":
+                world.cancel_crack(pid)
+
+            elif kind == "trinket_crack_end":
+                outcome = world.finish_crack(pid, msg.get("grades"))
+                if outcome is None:
+                    continue
+                result, replacement = outcome
+                await send(ws, {"type": "trinket_cracked", "result": result, "journal": trinket_store.journal(pid)})
+                # Everyone else only learns that it is gone; the contents stay private.
+                await broadcast(
+                    {"type": "trinket_gone", "id": result["id"], "by": pid, "species": result["species"], "spawn": replacement},
+                    exclude=pid,
+                )
+                await send(ws, {"type": "trinket_spawn", "trinket": replacement})
     finally:
         # A replaced session must not clean up the identity's newer session.
         if players.get(pid) is ws:
@@ -185,6 +219,9 @@ async def handler(ws):
             states.pop(pid, None)
             names.pop(pid, None)
             await broadcast({"type": "leave", "id": pid})
+            released = world.release(pid)
+            if released:
+                await broadcast({"type": "trinket_released", "trinket": released})
         print(f"- {name} [{pid}] ({len(players)} online)")
 
 
