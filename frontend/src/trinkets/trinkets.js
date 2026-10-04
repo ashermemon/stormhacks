@@ -31,6 +31,7 @@ const MISS = 0,
   PERFECT = 2;
 const REVEAL_ROLL_TIME = 1.3; // slot-machine spin before the tier lands
 const REVEAL_HOLD_TIME = 3.0;
+const REVEAL_OUT_TIME = 0.5; // the loot and the card fade away over this long
 const SAND = [new THREE.Color("#c8b48a"), new THREE.Color("#a08c64")];
 const BUBBLE = [new THREE.Color("#e8f7ff")];
 
@@ -461,7 +462,7 @@ export function createTrinkets({
     if (result.newItem) highlights.push(result.item);
     if (nextJournal?.shells !== undefined) setShells(nextJournal.shells);
     journal.update(nextJournal, highlights);
-    startReveal(result, at);
+    startReveal(result, at, t?.seed);
   });
 
   // ---- cracking (rhythm) ---------------------------------------------------
@@ -532,9 +533,10 @@ export function createTrinkets({
   }
 
   // ---- reveal: slot-machine tier roll, then the loot pops out ----------------
-  function startReveal(result, at) {
+  function startReveal(result, at, seed) {
     if (reveal) finishReveal();
-    const loot = buildLoot(result.item, result.itemTier);
+    // The creature you cracked, coloured by the rarity you rolled.
+    const loot = buildLoot(result.item, result.tier, result.species, seed);
     toonifyScene(loot);
     loot.visible = false;
     scene.add(loot);
@@ -564,14 +566,18 @@ export function createTrinkets({
       // Loot floats up out of the paws and spins.
       const k = Math.min(1, (r.t - REVEAL_ROLL_TIME) * 3);
       const pop = 1 + Math.sin(k * Math.PI) * 0.6;
+      // Then it spins faster, rises and shrinks away while the card fades out.
+      const out = Math.max(0, (r.t - REVEAL_ROLL_TIME - REVEAL_HOLD_TIME) / REVEAL_OUT_TIME);
+      const away = out * out * (3 - 2 * out);
+      if (out > 0 && !card.classList.contains("hiding")) card.classList.add("hiding");
       r.loot.position
         .copy(r.at)
-        .setY(r.at.y + k * 0.5 + Math.sin(time * 3) * 0.05);
-      r.loot.rotation.y += dt * 3;
+        .setY(r.at.y + k * 0.5 + away * 0.8 + Math.sin(time * 3) * 0.05);
+      r.loot.rotation.y += dt * (3 + away * 14);
       r.loot.scale.setScalar(
-        k * pop * (result.itemTier === "legendary" ? 2.2 : 1.6),
+        k * pop * (1 - away) * (result.itemTier === "legendary" ? 2.2 : 1.6),
       );
-      if (r.t > REVEAL_ROLL_TIME + REVEAL_HOLD_TIME) finishReveal();
+      if (out >= 1) finishReveal();
     }
   }
 
@@ -605,7 +611,7 @@ export function createTrinkets({
 
   function finishReveal() {
     scene.remove(reveal.loot);
-    reveal.loot.geometry.dispose();
+    reveal.loot.geometry?.dispose(); // model loot is a group (its geometry is shared)
     reveal = null;
     card.className = "";
   }

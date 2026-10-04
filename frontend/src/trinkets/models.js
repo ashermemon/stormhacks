@@ -3,6 +3,9 @@
 // us, so every trinket looks equally shiny until it is cracked.
 
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import trinketsUrl from "../../assets/models/world/extras/Trinkets.glb?url";
+import { makeTrinket } from "../trinketColors.js";
 import { seededRandom } from "./spawnZones.js";
 
 export const TIER_COLORS = {
@@ -147,9 +150,60 @@ function fish(random, hue) {
 const BUILDERS = { clam, crab, urchin, snail, fish };
 
 /** Build a trinket. Returns { group, colors } — colors are used for crack shards. */
+// ---------------------------------------------------------------------------
+// Trinkets.glb models (recoloured by trinketColors.js). Loaded once before the world
+// is built (loadTrinketModels); until then, or for anything without a model, the
+// procedural builders below are used.
+// ---------------------------------------------------------------------------
+let trinketScene = null;
+const MODEL_SCALE = 3.2; // the models are real-world sized; this matches the old trinkets
+const SPECIES_MODELS = {
+  clam: ["Clam"],
+  crab: ["Crab"],
+  urchin: ["Urchin"],
+  snail: ["Snail"],
+  fish: ["FishRound", "FishClassic", "FishAngel"],
+};
+export const FISH_MODELS = SPECIES_MODELS.fish;
+
+export async function loadTrinketModels() {
+  trinketScene ??= (await new GLTFLoader().loadAsync(trinketsUrl)).scene;
+  return trinketScene;
+}
+
+/** The model that stands for a species in the UI (the journal). */
+export function iconModelName(species) {
+  return SPECIES_MODELS[species]?.[0] ?? null;
+}
+
+/** A coloured, toon-styled copy of one of Trinkets.glb's models (centred), or null. */
+export function trinketModel(name, color, scale) {
+  if (!trinketScene) return null;
+  const model = makeTrinket(trinketScene, name, color);
+  model.scale.setScalar(scale);
+  return model;
+}
+
+// Which model a trinket uses (fish have three), from its seed: the same on every
+// client, and the same for the trinket on the seabed and what's revealed when cracked.
+function pickModel(names, random) {
+  return names[Math.floor(random() * names.length)];
+}
+
 export function buildTrinket(species, seed) {
   const random = seededRandom(seed ^ 0x5eed);
   const hue = Math.round(random() * 24) / 24; // a few dozen palettes, not infinitely many
+  const names = SPECIES_MODELS[species];
+  if (trinketScene && names) {
+    const color = new THREE.Color().setHSL(hue, 0.6, 0.62);
+    const name = pickModel(names, random);
+    const model = trinketModel(name, color, MODEL_SCALE * (0.9 + random() * 0.35));
+    // The model is centred; rest it on the floor.
+    model.position.y = -new THREE.Box3().setFromObject(model).min.y;
+    const root = new THREE.Group();
+    root.add(model);
+    return { group: root, colors: [color, color.clone().offsetHSL(0, 0, -0.2)] };
+  }
   const { group, colors } = BUILDERS[species](random, hue);
   group.scale.multiplyScalar(0.9 + random() * 0.35);
   const root = new THREE.Group();
@@ -158,8 +212,26 @@ export function buildTrinket(species, seed) {
 }
 
 /** What falls out of a cracked trinket: a shape picked from the item id, tinted by tier. */
-export function buildLoot(itemId, tier) {
+/** What's revealed when a trinket is cracked: the creature itself (its model, as on
+ *  the seabed when the seed is known), coloured by the rolled tier. */
+export function buildLoot(itemId, tier, species = null, seed = null) {
   const color = new THREE.Color(TIER_COLORS[tier]);
+  const names = SPECIES_MODELS[species];
+  let name = null;
+  if (names) {
+    if (seed === null) name = names[0];
+    else {
+      const random = seededRandom(seed ^ 0x5eed);
+      random(); // the hue, as in buildTrinket
+      name = pickModel(names, random);
+    }
+  }
+  const model = name && trinketModel(name, color, 2);
+  if (model) {
+    const loot = new THREE.Group();
+    loot.add(model);
+    return loot;
+  }
   let geometry;
   if (itemId.includes("pearl")) geometry = new THREE.SphereGeometry(0.22, 16, 12);
   else if (itemId.includes("coin") || itemId.includes("button")) geometry = new THREE.CylinderGeometry(0.22, 0.22, 0.05, 16).rotateX(Math.PI / 2);
