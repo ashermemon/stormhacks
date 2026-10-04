@@ -1,8 +1,17 @@
+/* One font everywhere: the same Pixelta used for nametags (see nametags.js).
+   Everything else inherits it from html/body. */
+@font-face {
+  font-family: "Pixelta";
+  src: url("../assets/fonts/Pixelta.ttf") format("truetype");
+  font-display: swap;
+}
+
 html,
 body {
   margin: 0;
   height: 100%;
   overflow: hidden;
+  font-family: "Pixelta", monospace;
 }
 
 canvas {
@@ -17,7 +26,6 @@ canvas {
   align-items: center;
   justify-content: center;
   gap: 16px;
-  font-family: system-ui, sans-serif;
   color: #fff;
 }
 #username{
