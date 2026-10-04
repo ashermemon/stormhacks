@@ -453,13 +453,31 @@ function paintSand(world, site) {
   texture.needsUpdate = true;
 }
 
+// The raw bytes are fetched once (and can be started before the campsites are known);
+// each campfire parses its own copy, since toonify/applyCampfire mutate what they get.
+let assetBytes = null;
+
+export function preloadCampfireAssets() {
+  const fetchBytes = (url) => fetch(url).then((r) => {
+    if (!r.ok) throw new Error(`Failed to load ${url}: ${r.status}`);
+    return r.arrayBuffer();
+  });
+  assetBytes ??= Promise.all([fetchBytes(campfireUrl), fetchBytes(logBenchUrl)]);
+  return assetBytes;
+}
+
 export async function createCampfire(scene, world, site, { openToward }) {
   const group = new THREE.Group();
   group.name = "campfire";
   scene.add(group);
   const ground = (x, z) => world.getGroundHeight(x, z);
 
-  const fire = (await new GLTFLoader().loadAsync(campfireUrl)).scene;
+  const [fireBytes, logBytes] = await preloadCampfireAssets();
+  const [fireGltf, logGltf] = await Promise.all([
+    new GLTFLoader().parseAsync(fireBytes.slice(0), ""),
+    new GLTFLoader().parseAsync(logBytes.slice(0), ""),
+  ]);
+  const fire = fireGltf.scene;
   toonifyScene(fire); // first: stones and logs get the toon look and outlines
   applyCampfire(fire); // then: the fire, glowing logs and firelight on top
   fire.scale.setScalar(FIRE_SCALE);
@@ -467,7 +485,7 @@ export async function createCampfire(scene, world, site, { openToward }) {
   group.add(fire);
   world.addObstacle(site.x, site.z, FIRE_RADIUS);
 
-  const logModel = (await new GLTFLoader().loadAsync(logBenchUrl)).scene;
+  const logModel = logGltf.scene;
   logModel.updateMatrixWorld(true);
   const marker = (name) => logModel.getObjectByName(name).getWorldPosition(new THREE.Vector3());
   const logLength = new THREE.Box3().setFromObject(logModel).getSize(new THREE.Vector3()).x * LOG_SCALE;

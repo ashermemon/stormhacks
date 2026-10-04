@@ -9,9 +9,9 @@ import { Character, OTTER_COLORS } from "./character.js";
 import { createChat } from "./chat.js";
 import { trackNames } from "./names.js";
 import { toonifyScene, updateWind } from "./toonshading.js";
-import { createScenery } from "./scenery.js";
+import { createScenery, preloadSceneryModels } from "./scenery.js";
 import { createSeating } from "./seating.js";
-import { createCampfire } from "./campfire.js";
+import { createCampfire, preloadCampfireAssets } from "./campfire.js";
 import { createWaterfall, WATERFALL } from "./waterfall.js";
 import { createFish } from "./fish.js";
 import { createBubbles } from "./bubbles.js";
@@ -64,7 +64,13 @@ function lerpAngle(a, b, t) {
 export async function loadScene() {
   const scene = new THREE.Scene();
   const environment = createEnvironment(scene);
-  const world = await loadWorld();
+  // Every download starts at once; the build steps below then find them ready.
+  const [world] = await Promise.all([
+    loadWorld(),
+    preloadSceneryModels(),
+    preloadCampfireAssets(),
+    loadTrinketModels(), // Trinkets.glb, for the fish and the trinkets
+  ]);
   const { getGroundHeight } = world;
   applyToonWater(world.root);
   scene.add(world.root);
@@ -108,7 +114,7 @@ export async function loadScene() {
   const aquatic = createAquaticArea(getGroundHeight);
   // Trinkets (and fish) use the World.glb spawn-zone meshes; collectSpawnZones hides them.
   const zones = collectSpawnZones(world.root);
-  await loadTrinketModels(); // Trinkets.glb, for the fish and the trinkets
+  // (Trinkets.glb was loaded above.)
   const bubbles = createBubbles(scene); // breath bubbles from fish and underwater otters
   const fish = createFish(scene, 12, { getGroundHeight, zones, bubbles });
 
