@@ -1,0 +1,13 @@
+<!doctype html><html><head><meta charset="UTF-8"><style>body{margin:0}</style></head><body><script type="module">
+import * as THREE from "three";
+import { loadScene } from "/src/game.js";
+const view = await loadScene();
+const { scene, environment, world, scenery, campfire, camera, renderer } = view;
+const c = scenery.campsite;
+const d = new THREE.Vector3(12 - c.x, 0, 5 - c.z).normalize();
+camera.position.set(c.x + d.x * 7, world.getGroundHeight(c.x + d.x * 7, c.z + d.z * 7) + 3.2, c.z + d.z * 7);
+camera.lookAt(c.x, c.y + 1, c.z);
+let f = 0;
+renderer.setAnimationLoop(() => { scenery.update(camera); environment.update(camera, 1); campfire?.update(2 + f / 60); renderer.render(scene, camera); if (++f === 30) console.log("PREVIEW ok"); });
+window.onerror = (e) => console.log("PREVIEW ERROR", e);
+</script></body></html>

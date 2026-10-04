@@ -59,6 +59,7 @@ export function startMenuTour(view, fadeElement) {
     fish.update(dt, nobody);
     scenery.update(camera);
     environment.update(camera, time);
+    view.campfire?.update(time);
     renderer.render(scene, camera);
   });
 }
