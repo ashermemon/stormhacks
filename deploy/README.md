@@ -24,5 +24,6 @@ Copy it before running setup, or any time (service stopped):
 
 ## Operations
 - Logs: `journalctl -u stormhacks -f`; status: `systemctl status stormhacks caddy`
+- Caddy config (not part of the automatic deploy): `sudo install -m 644 /opt/stormhacks/deploy/Caddyfile /etc/caddy/Caddyfile && sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy`. Caddy serves `/opt/stormhacks/frontend/dist` itself and proxies only `/ws` to the game server.
 - Manual deploy: Actions tab -> Deploy -> Run workflow
 - Restore: stop service, copy a file from `/var/lib/stormhacks/backups/` over the DB, start service.
