@@ -12,7 +12,7 @@ import { WATER_SURFACE_Y } from "./world.js";
 
 const MAX_BUBBLES = 400;
 const RISE_SPEED = [0.7, 1.2]; // units per second, slowest to fastest
-const SIZE = [0.05, 0.11]; // starting radius
+const SIZE = [0.01, 0.03]; // starting radius
 const LIFE = 6; // seconds, in case one never reaches the surface
 
 const vert = /* glsl */ `

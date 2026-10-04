@@ -160,7 +160,7 @@ export function createTrinkets({
   const ring = rhythm.querySelector(".ring");
   const pips = rhythm.querySelector(".pips");
   const gradeText = rhythm.querySelector(".grade");
-  
+
   let wardrobe = null;
   let pendingHatPurchase = null;
 
@@ -572,9 +572,13 @@ export function createTrinkets({
       const k = Math.min(1, (r.t - REVEAL_ROLL_TIME) * 3);
       const pop = 1 + Math.sin(k * Math.PI) * 0.6;
       // Then it spins faster, rises and shrinks away while the card fades out.
-      const out = Math.max(0, (r.t - REVEAL_ROLL_TIME - REVEAL_HOLD_TIME) / REVEAL_OUT_TIME);
+      const out = Math.max(
+        0,
+        (r.t - REVEAL_ROLL_TIME - REVEAL_HOLD_TIME) / REVEAL_OUT_TIME,
+      );
       const away = out * out * (3 - 2 * out);
-      if (out > 0 && !card.classList.contains("hiding")) card.classList.add("hiding");
+      if (out > 0 && !card.classList.contains("hiding"))
+        card.classList.add("hiding");
       r.loot.position
         .copy(r.at)
         .setY(r.at.y + k * 0.5 + away * 0.8 + Math.sin(time * 3) * 0.05);
