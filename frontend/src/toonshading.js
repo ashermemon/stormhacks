@@ -197,7 +197,6 @@ function makeOutlineMaterial(defines = {}) {
 }
 
 export const outlineMaterial = makeOutlineMaterial();
-const otterOutlineMaterial = makeOutlineMaterial({ OTTER_MASK: "" });
 
 // Averages normals of vertices that share a position (UV seams, hard edges),
 // so the hull expands as one closed shell instead of splitting at corners.
@@ -298,29 +297,52 @@ export function toonifyScene(root) {
 // Otters: colour texture + otter-specific outline mask
 // ---------------------------------------------------------------------------
 const texLoader = new THREE.TextureLoader();
-const otterMats = new Map();
+const otterMaps = new Map();
 
-function otterMaterial(textureOrUrl) {
-  const key = textureOrUrl.isTexture ? textureOrUrl.uuid : textureOrUrl;
-  if (otterMats.has(key)) return otterMats.get(key);
-  let map = textureOrUrl;
-  if (!map.isTexture) {
-    map = texLoader.load(textureOrUrl);
+function otterMap(textureOrUrl) {
+  if (textureOrUrl.isTexture) return textureOrUrl;
+  if (!otterMaps.has(textureOrUrl)) {
+    const map = texLoader.load(textureOrUrl);
     map.flipY = false; // glTF UV convention
     map.colorSpace = THREE.SRGBColorSpace;
     map.anisotropy = 4;
+    otterMaps.set(textureOrUrl, map);
   }
-  const mat = makeToonMaterial({ map });
-  otterMats.set(key, mat);
-  return mat;
+  return otterMaps.get(textureOrUrl);
 }
 
+// Silhouette-only outlines: the otter is built from overlapping parts, so a plain
+// inverted hull also draws lines where the head meets the body, the arms, the tail...
+// Each otter stamps its own stencil value where it's drawn, and its outline is only
+// drawn where that value isn't, i.e. outside its own silhouette. A different value
+// per otter keeps the outline between two overlapping otters.
+// Needs a renderer created with { stencil: true }.
+let nextStencilRef = 1;
+
 export function applyToonStyle(otterRoot, textureOrUrl) {
-  const mat = otterMaterial(textureOrUrl);
+  const ref = nextStencilRef;
+  nextStencilRef = (nextStencilRef % 255) + 1;
+
+  const mat = makeToonMaterial({ map: otterMap(textureOrUrl) });
+  mat.stencilWrite = true;
+  mat.stencilRef = ref;
+  mat.stencilFunc = THREE.AlwaysStencilFunc;
+  mat.stencilZPass = THREE.ReplaceStencilOp;
+
+  // Created after `mat` on purpose: three draws opaque materials in id order, so
+  // the body stamps the stencil before its outline tests it.
+  const outline = makeOutlineMaterial({ OTTER_MASK: "" });
+  outline.stencilWrite = true; // enables the stencil test; ops below keep the buffer as is
+  outline.stencilRef = ref;
+  outline.stencilFunc = THREE.NotEqualStencilFunc;
+  outline.stencilFail = THREE.KeepStencilOp;
+  outline.stencilZFail = THREE.KeepStencilOp;
+  outline.stencilZPass = THREE.KeepStencilOp;
+
   otterRoot.traverse((o) => {
     if (!o.isMesh) return;
     o.material = mat;
-    addOutlinePass(o, otterOutlineMaterial);
+    addOutlinePass(o, outline);
     o.userData._toonified = true; // toonifyScene will leave it alone
   });
   return otterRoot;
