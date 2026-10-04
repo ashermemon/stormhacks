@@ -24,6 +24,15 @@
 //                                        it also draws where the mesh overlaps itself
 //                                        (hill in front of hill); for terrain
 //
+// Per-material extras (set on the source material before toonifying):
+//   material.alphaTest > 0            -> cut-out leaves/petals (kept from glTF alphaMode MASK)
+//   material.userData.keepNormals     -> back faces use the front normal instead of flipping
+//                                        it (grass/leaf cards whose normals are authored to
+//                                        shade as one soft volume)
+//   material.userData.wind = 0.1      -> sways in the wind; the number is how far (world
+//                                        units) a vertex 1 unit above the model's base moves.
+//                                        Drive it with updateWind(elapsedSeconds).
+//
 // The shading uses its own light direction (setToonLight), so the scene looks the
 // same regardless of the lights you add. Lights don't need to be removed; they're ignored.
 
@@ -59,6 +68,15 @@ export function setToonLight(x, y, z) {
   toonUniforms.lightDir.value.set(x, y, z).normalize();
 }
 
+export const windUniforms = {
+  windTime: { value: 0 },
+  windDir: { value: new THREE.Vector2(0.8, 0.6).normalize() }, // world xz the gusts push toward
+};
+
+export function updateWind(elapsedSeconds) {
+  windUniforms.windTime.value = elapsedSeconds;
+}
+
 // ---------------------------------------------------------------------------
 // Toon surface shader (works on static, skinned and instanced meshes)
 // ---------------------------------------------------------------------------
@@ -68,6 +86,10 @@ const toonVert = /* glsl */ `
   #include <skinning_pars_vertex>
   varying vec2 vUv;
   varying vec3 vNormalW;
+  #ifdef WIND_STRENGTH
+    uniform float windTime;
+    uniform vec2 windDir;
+  #endif
   void main() {
     vUv = uv;
     #include <color_vertex>
@@ -79,7 +101,23 @@ const toonVert = /* glsl */ `
     #endif
     #include <begin_vertex>
     #include <skinning_vertex>
-    #include <project_vertex>
+    #ifdef WIND_STRENGTH
+      // Bend grows with height above the model's base, so roots stay planted. The phase
+      // runs across the world, so gusts roll over a meadow instead of every blade in sync.
+      vec4 worldPos = vec4(transformed, 1.0);
+      #ifdef USE_INSTANCING
+        worldPos = instanceMatrix * worldPos;
+      #endif
+      worldPos = modelMatrix * worldPos;
+      float height = max(transformed.y, 0.0);
+      float phase = windTime * 1.6 + worldPos.x * 0.35 + worldPos.z * 0.22;
+      float gust = sin(phase) * 0.6 + sin(phase * 2.3 + 1.7) * 0.25 + 0.35;
+      worldPos.xz += windDir * gust * WIND_STRENGTH * height * height;
+      vec4 mvPosition = viewMatrix * worldPos;
+      gl_Position = projectionMatrix * mvPosition;
+    #else
+      #include <project_vertex>
+    #endif
     #ifdef CLIP_BELOW_Y
       vWorldY = (modelMatrix * vec4(transformed, 1.0)).y;
     #endif
@@ -109,8 +147,14 @@ const toonFrag = /* glsl */ `
     #if defined(USE_COLOR) || defined(USE_COLOR_ALPHA)
       base.rgb *= vColor.rgb;
     #endif
+    #ifdef ALPHA_CUTOFF
+      if (base.a < ALPHA_CUTOFF) discard;
+      base.a = 1.0; // what survives the cut is solid; a soft alpha would blend with the page
+    #endif
     vec3 n = normalize(vNormalW);
-    if (!gl_FrontFacing) n = -n;               // correct shading on double-sided faces
+    #ifndef KEEP_NORMALS
+      if (!gl_FrontFacing) n = -n;             // correct shading on double-sided faces
+    #endif
     float lit = smoothstep(threshold - softness, threshold + softness, dot(n, lightDir));
     gl_FragColor = vec4(mix(base.rgb * shadowTint, base.rgb, lit) + emissive, base.a);
     #include <colorspace_fragment>
@@ -125,7 +169,15 @@ function makeToonMaterial({
   transparent = false,
   side = THREE.FrontSide,
   vertexColors = false,
+  alphaTest = 0,
+  wind = 0,
+  keepNormals = false,
 } = {}) {
+  const defines = {};
+  if (map) defines.USE_MAP = "";
+  if (alphaTest > 0) defines.ALPHA_CUTOFF = alphaTest.toFixed(4);
+  if (wind > 0) defines.WIND_STRENGTH = wind.toFixed(4);
+  if (keepNormals) defines.KEEP_NORMALS = "";
   const mat = new THREE.ShaderMaterial({
     uniforms: {
       diffuse: { value: color.clone() },
@@ -133,8 +185,9 @@ function makeToonMaterial({
       opacity: { value: opacity },
       map: { value: map },
       ...toonUniforms, // shared objects, so tweaking toonUniforms updates everything
+      ...(wind > 0 ? windUniforms : {}),
     },
-    defines: map ? { USE_MAP: "" } : {},
+    defines,
     vertexShader: toonVert,
     fragmentShader: toonFrag,
     transparent,
@@ -339,6 +392,9 @@ function toToon(src, stencilRef = 0) {
     transparent: src.transparent,
     side: src.side,
     vertexColors: src.vertexColors,
+    alphaTest: src.alphaTest,
+    wind: src.userData.wind ?? 0,
+    keepNormals: Boolean(src.userData.keepNormals),
   });
   mat.name = `${src.name || "material"} (toon)`;
   if (stencilRef) stampStencil(mat, stencilRef);

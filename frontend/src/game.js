@@ -8,7 +8,8 @@ import { applyToonWater, updateWater } from "./watershader.js";
 import { Character, OTTER_COLORS } from "./character.js";
 import { createChat } from "./chat.js";
 import { trackNames } from "./names.js";
-import { setToonLight, toonifyScene } from "./toonshading.js";
+import { setToonLight, toonifyScene, updateWind } from "./toonshading.js";
+import { createScenery } from "./scenery.js";
 import { createFish } from "./fish.js";
 import { createTrinkets } from "./trinkets/trinkets.js";
 import { collectSpawnZones } from "./trinkets/spawnZones.js";
@@ -51,6 +52,10 @@ export async function startGame() {
   const { getGroundHeight } = world;
   applyToonWater(world.root);
   scene.add(world.root);
+  // Grass, flowers, trees, rocks and seaweed; keeps the spawn meadow open.
+  const scenery = await createScenery(scene, world, {
+    clearings: [{ x: SPAWN.x, z: SPAWN.z, r: 5 }],
+  });
 
   const camera = new THREE.PerspectiveCamera(
     70,
@@ -199,6 +204,7 @@ export async function startGame() {
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.1);
     updateWater(clock.elapsedTime);
+    updateWind(clock.elapsedTime);
     fish.update(dt, player);
 
     cameraYaw += keys.orbit() * ORBIT_SPEED * dt;
@@ -274,6 +280,7 @@ export async function startGame() {
       camZ,
     );
     camera.lookAt(player.x, player.y + AVATAR_HEIGHT, player.z);
+    scenery.update(camera);
     trinkets.update(dt, player, camera);
 
     // Network.

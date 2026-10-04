@@ -40,13 +40,16 @@ export async function loadWorld() {
 
   const { getGroundHeight, mapHalf } = buildHeightLookup(terrain);
   const resolveColliders = buildColliders(colliders);
+  const obstacles = buildObstacleGrid();
 
   // Moves the player by (dx, dz) unless the ground there is too steep or too high,
-  // sliding along the blocked axis when only one direction is the problem.
+  // or a trunk/boulder is in the way, sliding along the blocked axis when only one
+  // direction is the problem.
   function resolveHorizontalMovement(player, dx, dz) {
     const from = getGroundHeight(player.x, player.z);
     const walkable = (x, z) => {
       if (Math.abs(x) > mapHalf || Math.abs(z) > mapHalf) return false;
+      if (obstacles.blocks(player.x, player.z, x, z)) return false;
       const ground = getGroundHeight(x, z);
       return ground <= MAX_WALK_HEIGHT && ground - from <= MAX_STEP_UP;
     };
@@ -60,7 +63,47 @@ export async function loadWorld() {
     }
   }
 
-  return { root, getGroundHeight, resolveHorizontalMovement, resolveColliders };
+  return {
+    root,
+    terrain,
+    mapHalf,
+    getGroundHeight,
+    resolveHorizontalMovement,
+    resolveColliders,
+    addObstacle: obstacles.add,
+  };
+}
+
+// Round obstacles on the ground (tree trunks, boulders), bucketed into a coarse grid so
+// a move only checks its neighbours. blocks(fromX, fromZ, toX, toZ) is true when the move
+// ends inside one and gets closer to its centre, so nothing can trap the otter.
+function buildObstacleGrid() {
+  const CELL = 8;
+  const cells = new Map();
+  const key = (i, j) => `${i},${j}`;
+
+  function add(x, z, radius) {
+    const i = Math.floor(x / CELL);
+    const j = Math.floor(z / CELL);
+    if (!cells.has(key(i, j))) cells.set(key(i, j), []);
+    cells.get(key(i, j)).push({ x, z, r: radius + COLLIDER_RADIUS * 0.5 });
+  }
+
+  function blocks(fromX, fromZ, toX, toZ) {
+    const i = Math.floor(toX / CELL);
+    const j = Math.floor(toZ / CELL);
+    for (let di = -1; di <= 1; di++) {
+      for (let dj = -1; dj <= 1; dj++) {
+        for (const o of cells.get(key(i + di, j + dj)) ?? []) {
+          const to = Math.hypot(toX - o.x, toZ - o.z);
+          if (to < o.r && to < Math.hypot(fromX - o.x, fromZ - o.z)) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  return { add, blocks };
 }
 
 // Raycasting the whole terrain every frame is too slow, so sample the grid once and
