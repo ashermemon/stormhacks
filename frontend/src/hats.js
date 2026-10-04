@@ -132,33 +132,25 @@ export function createWardrobe(
                 <div class="hat-name">
                   ${hat.name}
                 </div>
+                <div class="hat-price"> ${ !owned ? ( hat.price === 0 ? "Free" : `🐚 ${hat.price}` ) : "" } </div>
+                                ${
+                                  !owned
+                                    ? `
+                                      <div class="hat-locked">
+                                        ${
+                                          shells >= hat.price
+                                            ? "Buy"
+                                            : "Not enough shells"
+                                        }
+                                      </div>
+                                    `
+                                    : ""
+                                }
+                              </button>
+                            `;
+                          }).join("")}
 
-                <div class="hat-price">
-                  ${
-                    hat.price === 0
-                      ? "Free"
-                      : `🐚 ${hat.price}`
-                  }
-                </div>
-
-                ${
-                  !owned
-                    ? `
-                      <div class="hat-locked">
-                        ${
-                          shells >= hat.price
-                            ? "Buy"
-                            : "Not enough shells"
-                        }
-                      </div>
-                    `
-                    : ""
-                }
-              </button>
-            `;
-          }).join("")}
-
-        </div>
+                        </div>
 
         <p class="hat-hint">
           Click a hat to wear it
