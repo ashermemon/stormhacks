@@ -149,16 +149,75 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
 
       return;
     }
+  let pendingHatPurchase = null;
 
-    if (!wardrobe) {
-      wardrobe = createWardrobe(
-        character,
-        journal,
-        () => {
-          // Existing toggle handling, if needed.
-        },
+  net.on(
+    "hat_purchase",
+    (message) => {
+      if (!pendingHatPurchase) {
+        return;
+      }
+
+      const pending =
+        pendingHatPurchase;
+
+      pendingHatPurchase = null;
+
+      if (message.ok) {
+        if (message.journal) {
+          journal.update(
+            message.journal,
+          );
+        }
+
+        if (
+          message.shells !== undefined
+        ) {
+          setShells(message.shells);
+        }
+      } else {
+        flash(
+          toast,
+          message.message ||
+            "Hat purchase failed.",
+          "bad",
+        );
+      }
+
+      pending.resolve(
+        message.ok === true,
       );
+    },
+  );
+
+  function purchaseHat(hatId) {
+    if (pendingHatPurchase) {
+      return Promise.resolve(false);
     }
+
+    return new Promise(
+      (resolve) => {
+        pendingHatPurchase = {
+          resolve,
+        };
+
+        net.send({
+          type: "hat_purchase",
+          hat: hatId,
+        });
+      },
+    );
+  }
+  if (!wardrobe) {
+    wardrobe = createWardrobe(
+      character,
+      journal,
+      () => {
+        // Existing toggle handling, if needed.
+      },
+      purchaseHat,
+    );
+  }
 
     wardrobe.toggle();
   }

@@ -29,6 +29,7 @@ export function createWardrobe(
   character,
   journal,
   onToggle,
+  onPurchase,
 ) {
   let selected = character.getHatId();
 
@@ -193,6 +194,7 @@ export function createWardrobe(
   }
 
   async function selectHat(hat) {
+    // Already owned: just equip it.
     if (ownsHat(hat.id)) {
       if (hat.file) {
         const result =
@@ -214,6 +216,7 @@ export function createWardrobe(
       return;
     }
 
+    // Not owned: check local wallet first.
     const shells = getShells();
 
     if (shells < hat.price) {
@@ -224,24 +227,34 @@ export function createWardrobe(
       return;
     }
 
-    const purchased =
-      character.buyHat(hat.id);
-
-    if (!purchased) {
-      return;
-    }
-
-    const spent =
-      journal?.spendShells?.(hat.price);
-
-    if (!spent) {
+    if (!onPurchase) {
       console.warn(
-        `Could not deduct ${hat.price} shells for ${hat.id}.`,
+        "Hat purchase handler is not connected.",
       );
 
       return;
     }
 
+    // Server is authoritative for the purchase.
+    const purchased =
+      await onPurchase(hat.id);
+
+    if (!purchased) {
+      return;
+    }
+
+    // IMPORTANT:
+    // The server accepted the purchase, so unlock
+    // the hat in this Character instance.
+    if (!character.addHat(hat.id)) {
+      console.warn(
+        `Purchase succeeded but hat could not be unlocked: ${hat.id}`,
+      );
+
+      return;
+    }
+
+    // Automatically equip the newly purchased hat.
     if (hat.file) {
       const result =
         await character.setHat(

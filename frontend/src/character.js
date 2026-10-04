@@ -354,210 +354,143 @@ export class Character {
     }
   }
 
-  
-removeHat() {
-  if (this.hat) {
-    this.hat.parent?.remove(this.hat);
-    this.hat = null;
+  removeHat() {
+    if (this.hat) {
+      this.hat.parent?.remove(this.hat);
+      this.hat = null;
+    }
+
+    this.hatId = "none";
   }
 
-  this.hatId = "none";
-}
+  async setHat(hatFile, hatId = null) {
+    if (!hatFile) {
+      this.removeHat();
+      return;
+    }
 
-async setHat(hatFile, hatId = null) {
-  if (!hatFile) {
+    if (!this.model) {
+      await this.ready;
+    }
+
+    const head =
+      this.model?.getObjectByName("head");
+
+    if (!head) {
+      console.warn(
+        "Otter head bone not found; hat could not be attached.",
+      );
+
+      return;
+    }
+
     this.removeHat();
-    return;
-  }
 
-  if (!this.model) {
-    await this.ready;
-  }
+    let hatGltf;
 
-  const head = this.model?.getObjectByName("head");
+    if (hatFile === hatUrl) {
+      hatGltf =
+        await loadHatGltf();
+    } else {
+      hatGltf =
+        await loader.loadAsync(hatFile);
+    }
 
-  if (!head) {
-    console.warn(
-      "Otter head bone not found; hat could not be attached.",
-    );
-    return;
-  }
+    const hat =
+      hatGltf.scene.clone(true);
 
-  this.removeHat();
+    hat.name = "Hat";
 
-  let hatGltf;
-
-  // The current catalog only has one Hat.glb.
-  // Keep this cached so changing hats doesn't repeatedly fetch it.
-  if (hatFile === hatUrl) {
-    hatGltf = await loadHatGltf();
-  } else {
-    hatGltf = await loader.loadAsync(hatFile);
-  }
-
-  const hat = hatGltf.scene.clone(true);
-
-  hat.name = "Hat";
-
-  hat.position.set(
-    0,
-    0.36,
-    0,
-  );
-
-  head.add(hat);
-
-  this.hat = hat;
-  this.hatId = hatId ?? "hat";
-
-  return hat;
-}
-
-getHatId() {
-  return this.hatId;
-}
-
-getHat() {
-  return this.hat;
-}
-ownsHat(hatId) {
-  if (hatId === "none") return true;
-  return this.ownedHats[hatId] === true;
-}
-
-addHat(hatId) {
-  if (!HAT_FILES[hatId]) {
-    console.warn(`Unknown hat: ${hatId}`);
-    return false;
-  }
-
-  this.ownedHats[hatId] = true;
-  return true;
-}
-removeHat() {
-  if (this.hat) {
-    this.hat.parent?.remove(this.hat);
-    this.hat = null;
-  }
-
-  this.hatId = "none";
-}
-
-async setHat(hatFile, hatId = null) {
-  if (!hatFile) {
-    this.removeHat();
-    return;
-  }
-
-  if (!this.model) {
-    await this.ready;
-  }
-
-  const head =
-    this.model?.getObjectByName("head");
-
-  if (!head) {
-    console.warn(
-      "Otter head bone not found; hat could not be attached.",
+    hat.position.set(
+      0,
+      0.36,
+      0,
     );
 
-    return;
+    head.add(hat);
+
+    this.hat = hat;
+    this.hatId =
+      hatId ?? "hat";
+
+    return hat;
   }
 
-  this.removeHat();
-
-  let hatGltf;
-
-  if (hatFile === hatUrl) {
-    hatGltf =
-      await loadHatGltf();
-  } else {
-    hatGltf =
-      await loader.loadAsync(hatFile);
+  getHatId() {
+    return this.hatId;
   }
 
-  const hat =
-    hatGltf.scene.clone(true);
+  getHat() {
+    return this.hat;
+  }
 
-  hat.name = "Hat";
+  ownsHat(hatId) {
+    if (hatId === "none") {
+      return true;
+    }
 
-  hat.position.set(
-    0,
-    0.36,
-    0,
-  );
+    return this.ownedHats[hatId] === true;
+  }
 
-  head.add(hat);
+  addHat(hatId) {
+    if (!HAT_FILES[hatId]) {
+      console.warn(
+        `Unknown hat: ${hatId}`,
+      );
 
-  this.hat = hat;
-  this.hatId =
-    hatId ?? "hat";
+      return false;
+    }
 
-  return hat;
-}
+    this.ownedHats[hatId] = true;
 
-getHatId() {
-  return this.hatId;
-}
-
-getHat() {
-  return this.hat;
-}
-
-ownsHat(hatId) {
-  if (hatId === "none") {
     return true;
   }
 
-  return this.ownedHats[hatId] === true;
-}
+  buyHat(hatId) {
+    if (!HAT_FILES[hatId]) {
+      console.warn(
+        `Unknown hat: ${hatId}`,
+      );
 
-buyHat(hatId) {
-  if (!HAT_FILES[hatId]) {
-    console.warn(
-      `Unknown hat: ${hatId}`,
-    );
+      return false;
+    }
 
-    return false;
+    if (this.ownsHat(hatId)) {
+      console.warn(
+        `Hat already owned: ${hatId}`,
+      );
+
+      return false;
+    }
+
+    this.ownedHats[hatId] = true;
+
+    return true;
   }
 
-  if (this.ownsHat(hatId)) {
-    console.warn(
-      `Hat already owned: ${hatId}`,
-    );
+  removeOwnedHat(hatId) {
+    if (hatId === "wizardHat") {
+      console.warn(
+        "Cannot remove the default wizard hat ownership.",
+      );
 
-    return false;
+      return false;
+    }
+
+    delete this.ownedHats[hatId];
+
+    if (this.hatId === hatId) {
+      this.removeHat();
+    }
+
+    return true;
   }
 
-  this.ownedHats[hatId] = true;
-
-  return true;
-}
-
-
-removeOwnedHat(hatId) {
-  if (hatId === "wizardHat") {
-    console.warn(
-      "Cannot remove the default wizard hat ownership.",
-    );
-
-    return false;
+  getOwnedHats() {
+    return {
+      ...this.ownedHats,
+    };
   }
-
-  delete this.ownedHats[hatId];
-
-  if (this.hatId === hatId) {
-    this.removeHat();
-  }
-
-  return true;
-}
-
-getOwnedHats() {
-  return {
-    ...this.ownedHats,
-  };
-}
 
   dispose() {
     this.setName(null);
