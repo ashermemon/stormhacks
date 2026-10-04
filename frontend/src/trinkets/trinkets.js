@@ -10,6 +10,7 @@ import { toonifyScene } from "../toonshading.js";
 import { buildLoot, buildTrinket, TIER_COLORS } from "./models.js";
 import { createJournal } from "./journal.js";
 import { spawnPointFromSeed } from "./spawnZones.js";
+import { createWardrobe } from "../hats.js";
 import "./trinkets.css";
 
 const GRAB_RANGE = 1.8; // from the otter's middle to the trinket
@@ -119,6 +120,7 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   const glintTexture = makeGlintTexture();
   const particleGeometry = new THREE.IcosahedronGeometry(1, 0);
   const journal = createJournal(net.trinketCatalog, net.journal, onJournalToggle);
+  let wardrobe = null;
   let crack = null; // null | { turning } | { pending } | { beats, grades, t } | { waiting }
   let reveal = null;
   let shake = 0;
@@ -134,6 +136,20 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   const ring = rhythm.querySelector(".ring");
   const pips = rhythm.querySelector(".pips");
   const gradeText = rhythm.querySelector(".grade");
+  function toggleWardrobe() {
+    const character = getCharacter(net.id);
+
+    if (!character) {
+      console.warn("Cannot open wardrobe: character is not loaded.");
+      return;
+    }
+
+    if (!wardrobe) {
+      wardrobe = createWardrobe(character);
+    }
+
+    wardrobe.toggle();
+  }
 
   let currentShells = net.journal?.shells ?? 0;
   const shellCounter = div(
@@ -474,6 +490,7 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
       endCrack();
     }
     if (e.code === "KeyF") pressAction();
+    if (e.code === "KeyH") toggleWardrobe();
   });
   window.addEventListener("keyup", (e) => {
     if (e.code === "KeyF") releaseAction();
@@ -500,6 +517,7 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
     pressAction,
     releaseAction,
     toggleJournal: () => journal.toggle(),
+    toggleWardrobe,
 
     update(dt, currentPlayer, camera) {
       player = currentPlayer;

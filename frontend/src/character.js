@@ -4,6 +4,7 @@ import * as SkeletonUtils from "three/examples/jsm/utils/SkeletonUtils.js";
 import otterUrl from "../assets/models/character/Otter.glb?url";
 import { createNametag, disposeNametag } from "./nametags.js";
 import { applyToonStyle } from "./toonshading.js";
+import hatUrl from "../assets/models/character/Hat.glb?url";
 
 const NAMETAG_GAP = 0.4;
 const MODEL_SCALE = 1.8;
@@ -39,6 +40,7 @@ const HOLD_SWAP_FADE = 0.25;
 // Bench poses (SitDown, Sit, StandUp) hand off to each other exactly, so barely blend.
 const POSE_FADE = 0.05;
 
+
 const TEXTURE_URLS = Object.fromEntries(
   Object.entries(
     import.meta.glob("../assets/models/character/textures/Otter_*.png", {
@@ -54,6 +56,17 @@ export const OTTER_COLORS = Object.keys(TEXTURE_URLS);
 const loader = new GLTFLoader();
 const textureLoader = new THREE.TextureLoader();
 let gltfPromise = null;
+let hatPromise = null;
+
+function loadHatGltf() {
+  hatPromise ??= loader.loadAsync(hatUrl);
+  return hatPromise;
+}
+
+export const HAT_FILES = {
+  none: null,
+  hat: hatUrl,
+};
 const textureCache = new Map();
 
 function loadOtterGltf() {
@@ -91,6 +104,8 @@ export class Character {
     this.model = null;
     this.nametag = null;
     this.nametagHeight = 2;
+    this.hat = null;
+    this.hatId = "none";
 
     if (name) this.setName(name);
     this.ready = this.load();
@@ -332,6 +347,86 @@ export class Character {
     }
   }
 
+  removeHat() {
+  if (this.hat) {
+    this.hat.parent?.remove(this.hat);
+
+    this.hat.traverse((object) => {
+      if (!object.isMesh) return;
+
+      object.geometry?.dispose();
+
+      if (Array.isArray(object.material)) {
+        object.material.forEach((material) => {
+          material.dispose();
+        });
+      } else {
+        object.material?.dispose();
+      }
+    });
+
+    this.hat = null;
+  }
+
+  this.hatId = "none";
+}
+
+async setHat(hatFile, hatId = null) {
+  if (!hatFile) {
+    this.removeHat();
+    return;
+  }
+
+  if (!this.model) {
+    await this.ready;
+  }
+
+  const head = this.model?.getObjectByName("head");
+
+  if (!head) {
+    console.warn(
+      "Otter head bone not found; hat could not be attached.",
+    );
+    return;
+  }
+
+  this.removeHat();
+
+  let hatGltf;
+
+  // The current catalog only has one Hat.glb.
+  // Keep this cached so changing hats doesn't repeatedly fetch it.
+  if (hatFile === hatUrl) {
+    hatGltf = await loadHatGltf();
+  } else {
+    hatGltf = await loader.loadAsync(hatFile);
+  }
+
+  const hat = hatGltf.scene.clone(true);
+
+  hat.name = "Hat";
+
+  hat.position.set(
+    0,
+    0.36,
+    0,
+  );
+
+  head.add(hat);
+
+  this.hat = hat;
+  this.hatId = hatId ?? "hat";
+
+  return hat;
+}
+
+getHatId() {
+  return this.hatId;
+}
+
+getHat() {
+  return this.hat;
+}
   dispose() {
     this.setName(null);
     this.scene.remove(this.root);
