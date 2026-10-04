@@ -112,8 +112,9 @@ const WHITE = new THREE.Color(1, 1, 1);
  * @param world   what loadWorld returned
  * @param clearings  [{x, z, r}] spots kept free of trees and rocks (e.g. the spawn)
  * @param camps      campfire spots to find (see findCampsite): [{ near, ring?, ideal?, faceStream? }]
+ * @param waterfall  waterfall.js's WATERFALL: its path is kept clear and framed with rocks
  */
-export async function createScenery(scene, world, { clearings = [], camps = [] } = {}) {
+export async function createScenery(scene, world, { clearings = [], camps = [], waterfall = null } = {}) {
   const models = await loadModels();
   const field = buildField(world);
   const scatter = new Scatter(models, field);
@@ -124,7 +125,16 @@ export async function createScenery(scene, world, { clearings = [], camps = [] }
     if (site) campsites.push(site);
   }
   const allClearings = [...clearings, ...campsites.map((c) => ({ x: c.x, z: c.z, r: CAMP_RADIUS }))];
-  placeEverything(scatter, field, world, allClearings);
+  if (waterfall) {
+    // Nothing growing or lying in the waterfall's path, from the ledge to the pool.
+    for (let k = 0; k <= 10; k++) {
+      const t = k / 10;
+      const width = waterfall.topWidth + (waterfall.bottomWidth - waterfall.topWidth) * t;
+      const z = waterfall.topZ + (waterfall.bottomZ - waterfall.topZ) * t;
+      allClearings.push({ x: waterfall.x, z, r: width / 2 + 2 });
+    }
+  }
+  placeEverything(scatter, field, world, allClearings, waterfall);
   const growth = ["meadowGrass", "tallGrass", "shortGrass", "flowers3", "flowers4"];
   for (const c of campsites) scatter.clearAround(c.x, c.z, CAMP_RADIUS - 0.3, growth);
   const chunks = scatter.build(scene);
@@ -590,7 +600,7 @@ function findCampsite(field, { near, ring = [10, 30], ideal = 16, faceStream = f
   return { ...best, y: ground(best.x, best.z), toWater };
 }
 
-function placeEverything(scatter, field, world, clearings) {
+function placeEverything(scatter, field, world, clearings, waterfall) {
   const { ground, zone, slope, waterDist, wildDist, footing, inCave, meadowLight, mapHalf } = field;
   const random = seededRandom(SEED);
   const noise = makeNoise(SEED);
@@ -755,6 +765,7 @@ function placeEverything(scatter, field, world, clearings) {
     const zn = zone(x, z);
     if ((zn !== ROCK && zn !== SNOW) || slope(x, z) > 0.9 || ground(x, z) > 28) return;
     if (random() > (zn === ROCK ? 0.4 : 0.15)) return;
+    if (cleared(x, z, 2)) return;
     const s = range(1.2, 3.2);
     rock(x, footing(x, z, s), z, s, 0.35);
     obstacle(x, z, 1.1 * s);
@@ -827,9 +838,27 @@ function placeEverything(scatter, field, world, clearings) {
   grid(6, (x, z) => {
     if (WATER_SURFACE_Y - ground(x, z) < 1.2 || inCave(x, z, 2)) return;
     if (random() > 0.3) return;
+    if (cleared(x, z, 1)) return;
     const s = range(0.6, 1.6);
     rock(x, footing(x, z, s), z, s, 0.3);
   });
+
+  // --- The waterfall (waterfall.js): rocks either side of the ledge it pours from,
+  // down its sides and around the pool it lands in, so it comes out of a rocky cleft. ---
+  if (waterfall) {
+    const { x, topZ, bottomZ, topWidth, bottomWidth } = waterfall;
+    const frame = [
+      [x - topWidth / 2 - 1.3, topZ - 0.4, 2.4],
+      [x + topWidth / 2 + 1.3, topZ - 0.2, 2.2],
+      [x - topWidth / 2 - 0.4, topZ - 2.4, 1.8],
+      [x + topWidth / 2 + 0.6, topZ - 2.2, 2.0],
+      [x - 4.4, topZ + 4.5, 1.6],
+      [x + 4.6, topZ + 4.8, 1.5],
+      [x - bottomWidth / 2 - 1.6, bottomZ - 0.3, 1.5],
+      [x + bottomWidth / 2 + 1.8, bottomZ + 0.2, 1.3],
+    ];
+    for (const [rx, rz, s] of frame) rock(rx, footing(rx, rz, s * 0.8), rz, s, 0.3);
+  }
 
   // --- Benches: a short way back from the banks, each looking out over the water. ---
   const spots = [];

@@ -60,6 +60,7 @@ export function startMenuTour(view, fadeElement) {
     scenery.update(camera);
     environment.update(camera, time);
     for (const campfire of view.campfires) campfire.update(time);
+    view.waterfall.update(time);
     renderer.render(scene, camera);
   });
 }

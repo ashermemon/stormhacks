@@ -12,6 +12,7 @@ import { toonifyScene, updateWind } from "./toonshading.js";
 import { createScenery } from "./scenery.js";
 import { createSeating } from "./seating.js";
 import { createCampfire } from "./campfire.js";
+import { createWaterfall, WATERFALL } from "./waterfall.js";
 import { createFish } from "./fish.js";
 import { createTrinkets } from "./trinkets/trinkets.js";
 import { collectSpawnZones } from "./trinkets/spawnZones.js";
@@ -72,7 +73,10 @@ export async function loadScene() {
       { near: SPAWN }, // a short walk from the spawn, looking out at the pond
       { near: { x: -20, z: -12 }, ring: [0, 18], ideal: 0, faceStream: true }, // across the water
     ],
+    waterfall: WATERFALL,
   });
+  // The waterfall the stream begins from.
+  const waterfall = createWaterfall(scene, world);
   // Campfires with log seats around them.
   const campfires = await Promise.all(
     scenery.campsites.map((site) => createCampfire(scene, world, site, { openToward: SPAWN })),
@@ -107,12 +111,12 @@ export async function loadScene() {
   // Cel-shade everything built so far (the water keeps its own shader); otters are styled in Character.
   toonifyScene(scene);
 
-  return { scene, environment, world, scenery, campfires, camera, renderer, aquatic, zones, fish };
+  return { scene, environment, world, scenery, campfires, waterfall, camera, renderer, aquatic, zones, fish };
 }
 
 /** Connects and starts playing in a scene from loadScene(). */
 export async function startGame(view) {
-  const { scene, environment, world, scenery, campfires, camera, renderer, aquatic, zones, fish } = view;
+  const { scene, environment, world, scenery, campfires, waterfall, camera, renderer, aquatic, zones, fish } = view;
   const { getGroundHeight } = world;
   const canvas = renderer.domElement;
   const lockPointer = () => canvas.requestPointerLock()?.catch?.(() => {});
@@ -368,6 +372,7 @@ export async function startGame(view) {
     scenery.update(camera);
     environment.update(camera, clock.elapsedTime);
     for (const campfire of campfires) campfire.update(clock.elapsedTime);
+    waterfall.update(clock.elapsedTime);
     trinkets.update(dt, player, camera);
 
     // Network.
