@@ -115,7 +115,7 @@ const WHITE = new THREE.Color(1, 1, 1);
  * @param waterfall  waterfall.js's WATERFALL: its path is kept clear and framed with rocks
  */
 export async function createScenery(scene, world, { clearings = [], camps = [], waterfall = null } = {}) {
-  const models = await loadModels();
+  const models = await preloadSceneryModels();
   const field = buildField(world);
   const scatter = new Scatter(models, field);
   // Campfire spots are picked first, so trees, rocks and bushes keep clear of them.
@@ -185,6 +185,14 @@ function urlsByName(modules) {
   const out = {};
   for (const [path, url] of Object.entries(modules)) out[path.split("/").pop()] = url;
   return out;
+}
+
+let modelsPromise = null;
+
+/** Starts (once) fetching and preparing the models; createScenery reuses the result. */
+export function preloadSceneryModels() {
+  modelsPromise ??= loadModels();
+  return modelsPromise;
 }
 
 async function loadModels() {
