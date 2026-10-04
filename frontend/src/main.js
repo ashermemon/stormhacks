@@ -11,7 +11,7 @@ const status = document.getElementById("status");
 usernameInput.value = identity.getName();
 
 // Load the world straight away and film it behind the menu until Play.
-status.textContent = "Loading the river…";
+status.textContent = "Loading the river, this may take a while...";
 const scenePromise = loadScene().then((view) => {
   startMenuTour(view, document.getElementById("menu-fade"));
   menu.classList.add("ready");
