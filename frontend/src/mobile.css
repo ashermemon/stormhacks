@@ -1,0 +1,143 @@
+/* Touch controls — only used when body.has-mobile-controls is set. */
+
+#mobile-controls {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.mobile-stick {
+  position: absolute;
+  left: max(16px, env(safe-area-inset-left));
+  bottom: max(20px, env(safe-area-inset-bottom));
+  width: 120px;
+  height: 120px;
+  pointer-events: auto;
+}
+
+.mobile-stick-base {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.28);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  box-sizing: border-box;
+}
+
+.mobile-stick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+}
+
+/* Transparent look zone covering the right ~60% of the screen. */
+.mobile-look {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 60%;
+  height: 100%;
+  pointer-events: auto;
+}
+
+.mobile-actions {
+  position: absolute;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-areas:
+    "chat journal"
+    "rise rise"
+    "jump act";
+  gap: 10px;
+  align-items: end;
+  justify-items: end;
+  pointer-events: auto;
+  z-index: 1;
+}
+
+#mobile-chat {
+  grid-area: chat;
+}
+#mobile-journal {
+  grid-area: journal;
+}
+#mobile-rise {
+  grid-area: rise;
+}
+#mobile-jump {
+  grid-area: jump;
+}
+#mobile-action {
+  grid-area: act;
+}
+
+.mobile-btn {
+  margin: 0;
+  padding: 0;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font: 13px/1 "Pixelta", monospace;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-btn-lg {
+  width: 76px;
+  height: 76px;
+  font-size: 14px;
+}
+
+.mobile-btn-sm {
+  width: 52px;
+  height: 52px;
+  font-size: 11px;
+}
+
+.mobile-btn-action {
+  background: rgba(40, 110, 90, 0.55);
+  border-color: rgba(180, 230, 200, 0.7);
+}
+
+.mobile-btn.active {
+  background: rgba(255, 255, 255, 0.35);
+  transform: scale(0.94);
+}
+
+/* Lift chat above the joystick. */
+body.has-mobile-controls #chat {
+  bottom: 150px;
+  left: max(12px, env(safe-area-inset-left));
+  width: min(360px, calc(100vw - 24px));
+}
+
+body.has-mobile-controls #chat-log {
+  max-height: 120px;
+}
+
+/* Keep the journal usable on small screens. */
+@media (max-width: 700px) {
+  body.has-mobile-controls #journal {
+    width: min(100vw - 16px, 520px);
+    max-height: calc(100vh - 24px);
+    overflow: auto;
+  }
+}

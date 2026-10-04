@@ -147,6 +147,8 @@ const noNoWords = ["fuck", "shit", "bitch", "cunt", "nigger", "faggot", "asshole
   const projected = new THREE.Vector3();
 
   return {
+    open,
+    close,
     update() {
       const now = performance.now();
 

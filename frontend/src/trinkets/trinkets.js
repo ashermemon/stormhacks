@@ -360,15 +360,7 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   }
 
   // ---- input -----------------------------------------------------------------
-  window.addEventListener("keydown", (e) => {
-    if (e.target instanceof HTMLInputElement || e.repeat) return;
-    if (e.code === "KeyJ") journal.toggle();
-    if (e.code === "Escape" && crack?.beats) {
-      net.send({ type: "trinket_crack_cancel" });
-      endCrack();
-    }
-    if (e.code !== "KeyF") return;
-
+  function pressAction() {
     if (crack?.beats) return tap();
     if (crack) return; // waiting for the server
     const held = myTrinket();
@@ -384,18 +376,32 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
       return;
     }
     if (near) net.send({ type: "trinket_grab", id: near.id });
+  }
+
+  function releaseAction() {
+    fishGrabHeld = false;
+  }
+
+  window.addEventListener("keydown", (e) => {
+    if (e.target instanceof HTMLInputElement || e.repeat) return;
+    if (e.code === "KeyJ") journal.toggle();
+    if (e.code === "Escape" && crack?.beats) {
+      net.send({ type: "trinket_crack_cancel" });
+      endCrack();
+    }
+    if (e.code === "KeyF") pressAction();
   });
   window.addEventListener("keyup", (e) => {
-    if (e.code === "KeyF") fishGrabHeld = false;
+    if (e.code === "KeyF") releaseAction();
   });
 
   // ---- per frame ---------------------------------------------------------------
   function updatePrompt(near, held) {
     let text = "";
     if (crack) text = "";
-    else if (held && swimState() === "surface") text = "<b>F</b> crack it open!";
-    else if (held) text = "Surface to the waterline to crack it open! <b>Shift</b> ⬆";
-    else if (near) text = `<b>F</b> grab the ${near.species}`;
+    else if (held && swimState() === "surface") text = "<b>F / Act</b> crack it open!";
+    else if (held) text = "Surface to the waterline to crack it open! <b>Shift / Rise</b> ⬆";
+    else if (near) text = `<b>F / Act</b> grab the ${near.species}`;
     if (prompt.innerHTML !== text) prompt.innerHTML = text;
     prompt.className = text ? "show" : "";
   }
@@ -404,6 +410,9 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   return {
     /** Movement and diving are frozen while cracking. */
     busy: () => crack !== null,
+    pressAction,
+    releaseAction,
+    toggleJournal: () => journal.toggle(),
 
     update(dt, currentPlayer, camera) {
       player = currentPlayer;

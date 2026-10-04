@@ -12,6 +12,7 @@ import { setToonLight, toonifyScene } from "./toonshading.js";
 import { createFish } from "./fish.js";
 import { createTrinkets } from "./trinkets/trinkets.js";
 import { collectSpawnZones } from "./trinkets/spawnZones.js";
+import { createMobileControls } from "./mobile.js";
 
 const AVATAR_HEIGHT = 1; // where the camera looks, above the otter's feet
 const SPAWN = { x: 12, z: 5 }; // a meadow spot
@@ -81,7 +82,7 @@ export async function startGame() {
   const lockPointer = () => canvas.requestPointerLock()?.catch?.(() => {});
   const handleJournalToggle = (isOpen) => {
     if (isOpen) document.exitPointerLock();
-    else lockPointer();
+    else if (!document.body.classList.contains("has-mobile-controls")) lockPointer();
   };
 
   // Cel-shade everything built so far (the water keeps its own shader); otters are styled in Character.
@@ -148,8 +149,28 @@ export async function startGame() {
   let cameraPitch = 0.25;
   let cameraDistance = CAMERA_DISTANCE;
   // Mouse look: click the game to lock the cursor, then just move the mouse. Esc releases it.
-  canvas.addEventListener("click", lockPointer);
-  lockPointer(); // may work straight away thanks to the Play button click
+  // Mobile uses on-screen look drag instead of pointer lock.
+  const mobile = createMobileControls({
+    onLook(dx, dy) {
+      const sens = 0.0035;
+      cameraYaw -= dx * sens;
+      cameraPitch = Math.max(
+        CAMERA_PITCH_MIN,
+        Math.min(CAMERA_PITCH_MAX, cameraPitch + dy * sens),
+      );
+    },
+    onAction(pressed) {
+      if (pressed) trinkets.pressAction();
+      else trinkets.releaseAction();
+    },
+    onJournal: () => trinkets.toggleJournal(),
+    onChat: () => chat.open(),
+  });
+
+  if (!mobile) {
+    canvas.addEventListener("click", lockPointer);
+    lockPointer(); // may work straight away thanks to the Play button click
+  }
   window.addEventListener("mousemove", (e) => {
     if (document.pointerLockElement === canvas) {
       cameraYaw -= e.movementX * MOUSE_SENSITIVITY;
