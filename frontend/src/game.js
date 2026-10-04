@@ -10,7 +10,7 @@ import { setToonLight, toonifyScene } from "./toonshading.js";
 
 const ARENA_HALF = 20;
 const AVATAR = { w: 1, h: 2, d: 0.6 };
-const SPEED = 7;
+const SPEED = 5.5;
 const SEND_INTERVAL = 1 / 30;
 const CAMERA_DISTANCE = 8;
 const CAMERA_HEIGHT = 4;
