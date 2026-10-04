@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { WATER_SURFACE_Y } from "./world.js";
+import { ensureOutlineNormals } from "./toonshading.js";
 import { zoneOf, GRASS, SHORE, ROCK, SNOW } from "./terrainTexture.js";
 import { seededRandom } from "./trinkets/spawnZones.js";
 
@@ -11,7 +12,8 @@ import { seededRandom } from "./trinkets/spawnZones.js";
 // Placement reads the terrain's painted zones (meadow green, shore sand, mountain rock,
 // snow) plus the heightmap, so the props always match the ground under them. It is
 // seeded, so every player sees the same world. Everything is instanced in map chunks;
-// update(camera) thins out the small stuff with distance.
+// update(camera) thins out the small stuff with distance, and each instance dissolves
+// in and out over a short range (toonshading.js distanceFade) instead of popping.
 
 const MODEL_URLS = urlsByName(
   import.meta.glob("../assets/models/world/environment/*.gltf", {
@@ -36,6 +38,8 @@ const MOBILE = window.matchMedia("(pointer: coarse)").matches;
 const LOD_RANGE = MOBILE ? 0.6 : 1; // phones draw the small stuff over a shorter range
 const MAX_WALK_HEIGHT = 4.5; // obstacles only matter where the otter can walk
 const VIEW_LIMIT = 170; // past the fog (environment.js), nothing needs drawing
+const FADE_BAND = 0.2; // each instance dissolves over the last 20% of its draw distance...
+const MIN_FADE_BAND = 2; // ...but over at least this many units
 
 // How each kind of prop is drawn. cell: chunk size (smaller = finer culling).
 // Within `near` every instance draws; it thins to `minFrac` at `far`, then hides.
@@ -161,6 +165,7 @@ async function loadModels() {
   );
 
   for (const material of materials.values()) {
+    material.userData.distanceFade = true; // every instance carries a fadeRange (Scatter.build)
     const foliage = FOLIAGE[material.name];
     if (!foliage) continue;
     material.userData.wind = foliage.wind;
@@ -206,7 +211,7 @@ async function loadModels() {
   // Seaweed: the same grass models, swaying further.
   const seaweed = grass.clone();
   seaweed.name = "Seaweed";
-  seaweed.userData = { wind: 0.16, keepNormals: true };
+  seaweed.userData = { wind: 0.16, keepNormals: true, distanceFade: true };
   models.materialOverrides = { seaweed };
   return models;
 }
@@ -713,6 +718,17 @@ const _euler = new THREE.Euler();
 const _pos = new THREE.Vector3();
 const _scale = new THREE.Vector3();
 
+// A chunk's own geometry: the model's vertex buffers (shared, so not uploaded again)
+// plus this chunk's per-instance fade ranges.
+function chunkGeometry(base, fadeRange) {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setIndex(base.index);
+  for (const [name, attribute] of Object.entries(base.attributes)) geometry.setAttribute(name, attribute);
+  geometry.setAttribute("fadeRange", fadeRange);
+  geometry.boundingSphere = base.boundingSphere;
+  return geometry;
+}
+
 class Scatter {
   constructor(models, field) {
     this.models = models;
@@ -747,6 +763,16 @@ class Scatter {
       const lod = kind.near
         ? { near: kind.near * LOD_RANGE, far: kind.far * LOD_RANGE, minFrac: kind.minFrac }
         : { near: VIEW_LIMIT, far: VIEW_LIMIT, minFrac: 1 };
+      // How far away the instance at `rank` (0..1 in draw order) drops out: the inverse
+      // of the thinning in update(), so the shader fades exactly what the count would cut.
+      const dropDistance = (rank) =>
+        rank <= lod.minFrac
+          ? lod.far
+          : lod.near + ((lod.far - lod.near) * (1 - rank)) / (1 - lod.minFrac);
+      for (const part of model.parts) {
+        part.geometry.computeBoundingSphere();
+        if (kind.outline) ensureOutlineNormals(part.geometry); // once, shared by every chunk
+      }
 
       const cells = new Map();
       for (const p of placements) {
@@ -763,11 +789,18 @@ class Scatter {
         const group = new THREE.Group();
         group.name = `scenery:${name}`;
         const meshes = [];
+        const fade = new Float32Array(list.length * 2);
+        list.forEach((_, k) => {
+          const end = dropDistance(k / list.length);
+          fade[k * 2] = end - Math.max(MIN_FADE_BAND, end * FADE_BAND);
+          fade[k * 2 + 1] = end;
+        });
+        const fadeRange = new THREE.InstancedBufferAttribute(fade, 2);
         for (const { geometry, material: baseMaterial } of model.parts) {
           const material = (kind.material && this.models.materialOverrides[kind.material]) || baseMaterial;
           const isBark = baseMaterial.name.startsWith("Bark");
           const isLeaves = !isBark && baseMaterial.name.startsWith("Leave");
-          const mesh = new THREE.InstancedMesh(geometry, material, list.length);
+          const mesh = new THREE.InstancedMesh(chunkGeometry(geometry, fadeRange), material, list.length);
           list.forEach((p, k) => {
             _euler.set(p.tiltX, p.rotY, p.tiltZ, "YXZ");
             _quat.setFromEuler(_euler);

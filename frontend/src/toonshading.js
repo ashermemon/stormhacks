@@ -29,6 +29,10 @@
 //   material.userData.keepNormals     -> back faces use the front normal instead of flipping
 //                                        it (grass/leaf cards whose normals are authored to
 //                                        shade as one soft volume)
+//   material.userData.distanceFade    -> (instanced meshes with a per-instance `fadeRange`
+//                                        attribute: fully shown until x, gone at y, in
+//                                        horizontal distance from the camera) dissolves in
+//                                        and out with a fine dither instead of popping
 //   material.userData.wind = 0.1      -> sways in the wind; the number is how far (world
 //                                        units) a vertex 1 unit above the model's base moves.
 //                                        Drive it with updateWind(elapsedSeconds).
@@ -46,6 +50,31 @@ const atmoWorldVertex = /* glsl */ `
       atmoWorld = instanceMatrix * atmoWorld;
     #endif
     vAtmoWorld = (modelMatrix * atmoWorld).xyz;
+`;
+
+// Distance fade (DISTANCE_FADE): each instance dissolves between its fadeRange.x and .y.
+const fadeVertexPars = /* glsl */ `
+  #ifdef DISTANCE_FADE
+    attribute vec2 fadeRange;
+    varying float vFade;
+  #endif
+`;
+const fadeVertex = /* glsl */ `
+  #ifdef DISTANCE_FADE
+    vec4 fadeOrigin = vec4(0.0, 0.0, 0.0, 1.0);
+    #ifdef USE_INSTANCING
+      fadeOrigin = instanceMatrix * fadeOrigin;
+    #endif
+    fadeOrigin = modelMatrix * fadeOrigin;
+    vFade = 1.0 - smoothstep(fadeRange.x, fadeRange.y, length(fadeOrigin.xz - cameraPosition.xz));
+  #endif
+`;
+const fadeFragment = /* glsl */ `
+  #ifdef DISTANCE_FADE
+    // Screen-door dissolve: drop a growing share of pixels in a fine noise pattern.
+    float fadeNoise = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    if (vFade <= fadeNoise) discard;
+  #endif
 `;
 
 // ---------------------------------------------------------------------------
@@ -97,6 +126,7 @@ const toonVert = /* glsl */ `
   varying vec2 vUv;
   varying vec3 vNormalW;
   varying vec3 vAtmoWorld;
+  ${fadeVertexPars}
   #ifdef WIND_STRENGTH
     uniform float windTime;
     uniform vec2 windDir;
@@ -133,6 +163,7 @@ const toonVert = /* glsl */ `
       vWorldY = (modelMatrix * vec4(transformed, 1.0)).y;
     #endif
     ${atmoWorldVertex}
+    ${fadeVertex}
     vNormalW = normalize(mat3(modelMatrix) * objectNormal);
   }
 `;
@@ -153,7 +184,11 @@ const toonFrag = /* glsl */ `
   varying vec3 vAtmoWorld;
   varying vec2 vUv;
   varying vec3 vNormalW;
+  #ifdef DISTANCE_FADE
+    varying float vFade;
+  #endif
   void main() {
+    ${fadeFragment}
     vec4 base = vec4(diffuse, opacity);
     #ifdef USE_MAP
       base *= texture2D(map, vUv);
@@ -187,12 +222,14 @@ function makeToonMaterial({
   alphaTest = 0,
   wind = 0,
   keepNormals = false,
+  distanceFade = false,
 } = {}) {
   const defines = {};
   if (map) defines.USE_MAP = "";
   if (alphaTest > 0) defines.ALPHA_CUTOFF = alphaTest.toFixed(4);
   if (wind > 0) defines.WIND_STRENGTH = wind.toFixed(4);
   if (keepNormals) defines.KEEP_NORMALS = "";
+  if (distanceFade) defines.DISTANCE_FADE = "";
   const mat = new THREE.ShaderMaterial({
     uniforms: {
       diffuse: { value: color.clone() },
@@ -229,6 +266,7 @@ const outlineVert = /* glsl */ `
   #endif
   uniform float depthPush;
   varying vec3 vAtmoWorld;
+  ${fadeVertexPars}
   void main() {
     float w = 1.0;
     #ifdef OTTER_MASK
@@ -251,6 +289,7 @@ const outlineVert = /* glsl */ `
     #include <skinning_vertex>
     #include <project_vertex>
     ${atmoWorldVertex}
+    ${fadeVertex}
 
     // Shove the hull away from the camera so it can only show past the silhouette,
     // never through creases (armpits, ear bumps, where parts meet).
@@ -272,7 +311,11 @@ const outlineFrag = /* glsl */ `
   #ifdef CLIP_BELOW_Y
     varying float vWorldY;
   #endif
+  #ifdef DISTANCE_FADE
+    varying float vFade;
+  #endif
   void main() {
+    ${fadeFragment}
     #ifdef CLIP_BELOW_Y
       if (vWorldY < CLIP_BELOW_Y) discard; // no ink under the water surface
     #endif
@@ -300,7 +343,7 @@ export const outlineMaterial = makeOutlineMaterial();
 
 // Averages normals of vertices that share a position (UV seams, hard edges),
 // so the hull expands as one closed shell instead of splitting at corners.
-function ensureOutlineNormals(geometry) {
+export function ensureOutlineNormals(geometry) {
   if (geometry.attributes.outlineNormal) return;
   if (!geometry.attributes.normal) geometry.computeVertexNormals();
   const pos = geometry.attributes.position,
@@ -415,6 +458,7 @@ function toToon(src, stencilRef = 0) {
     alphaTest: src.alphaTest,
     wind: src.userData.wind ?? 0,
     keepNormals: Boolean(src.userData.keepNormals),
+    distanceFade: Boolean(src.userData.distanceFade),
   });
   mat.name = `${src.name || "material"} (toon)`;
   if (stencilRef) stampStencil(mat, stencilRef);
@@ -460,7 +504,10 @@ export function toonifyScene(root) {
   // Pass 2: outlines. Created after every body material on purpose: three draws
   // opaque materials in id order, so bodies stamp the stencil before outlines test it.
   for (const { ref, meshes } of groups.values()) {
-    const outline = silhouetteOutline(makeOutlineMaterial(UNDERWATER_CLIP), ref);
+    // Meshes that fade with distance need their ink to fade with them.
+    const fades = meshes.some((m) => m.geometry.attributes.fadeRange);
+    const defines = fades ? { ...UNDERWATER_CLIP, DISTANCE_FADE: "" } : UNDERWATER_CLIP;
+    const outline = silhouetteOutline(makeOutlineMaterial(defines), ref);
     for (const mesh of meshes) addOutlinePass(mesh, outline);
   }
   if (contours.length) {

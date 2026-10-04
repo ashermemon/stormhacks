@@ -200,8 +200,22 @@ export async function startGame() {
     z: player.z,
     ry: player.ry,
   };
+  // Tiny FPS readout in the top-left corner, refreshed twice a second.
+  const fpsLabel = document.createElement("div");
+  fpsLabel.id = "fps";
+  document.body.appendChild(fpsLabel);
+  let fpsFrames = 0;
+  let fpsSince = performance.now();
+
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.1);
+    fpsFrames++;
+    const now = performance.now();
+    if (now - fpsSince >= 500) {
+      fpsLabel.textContent = `${Math.round((fpsFrames * 1000) / (now - fpsSince))} fps`;
+      fpsFrames = 0;
+      fpsSince = now;
+    }
     updateWater(clock.elapsedTime);
     updateWind(clock.elapsedTime);
     fish.update(dt, player);
