@@ -5,7 +5,6 @@
   bottom: 12px;
   width: min(420px, calc(100vw - 24px));
   z-index: 10000;
-  font-family: system-ui, sans-serif;
   font-size: 14px;
   color: #fff;
   pointer-events: none;
@@ -34,15 +33,10 @@
 
 .chat-line.system {
   color: #cfd8dc;
-  font-style: italic;
 }
 
 .chat-line.error {
   color: #ff8a80;
-}
-
-.chat-name {
-  font-weight: 600;
 }
 
 #chat-input {
@@ -77,7 +71,6 @@
   top: 0;
   max-width: 220px;
   padding: 4px 10px;
-  font-family: system-ui, sans-serif;
   font-size: 14px;
   color: #111;
   background: #fff;
