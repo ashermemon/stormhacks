@@ -33,6 +33,9 @@ const CLIP_FOR_MODE = {
   hover: "Dive",
   rise: "Surface",
 };
+// Holding a trinket in the water: these clips have a "<name>_Hold" twin where he hugs
+// it to his chest. Swapping between twins keeps the clip time, so only the arms move.
+const HOLD_SWAP_FADE = 0.25;
 
 const TEXTURE_URLS = Object.fromEntries(
   Object.entries(
@@ -77,6 +80,8 @@ export class Character {
     this.actions = {};
     this.speed = 0;
     this.vy = 0;
+    this.holding = false;
+    this.currentName = null; // the move being played, without any _Hold suffix
 
     this.root = new THREE.Group();
     this.scene.add(this.root);
@@ -127,19 +132,24 @@ export class Character {
       // The on-back float cut out of SwimSurface, for when he's not moving.
       // Ping-pong so it loops without snapping from the end pose to the start.
       const swim = this.actions.SwimSurface?.getClip();
-      if (swim) {
+      for (const [source, name] of [
+        ["SwimSurface", "SwimFloat"],
+        ["SwimSurface_Hold", "SwimFloat_Hold"],
+      ]) {
+        const swim = this.actions[source]?.getClip();
+        if (!swim) continue;
         const frames = swim.duration * CLIP_FPS;
         const floatClip = THREE.AnimationUtils.subclip(
           swim,
-          "SwimFloat",
+          name,
           Math.round(FLOAT_START * frames),
           Math.round(FLOAT_END * frames),
           CLIP_FPS,
         );
-        this.actions.SwimFloat = this.mixer.clipAction(floatClip);
-        this.actions.SwimFloat.setLoop(THREE.LoopPingPong);
+        this.actions[name] = this.mixer.clipAction(floatClip);
+        this.actions[name].setLoop(THREE.LoopPingPong);
       }
-      for (const once of ["Surface", "JumpStart", "JumpLand"]) {
+      for (const once of ["Surface", "Surface_Hold", "JumpStart", "JumpLand"]) {
         this.actions[once]?.setLoop(THREE.LoopOnce);
         if (this.actions[once]) this.actions[once].clampWhenFinished = true;
       }
@@ -149,20 +159,49 @@ export class Character {
     return this;
   }
 
+  // The clip for a move: its _Hold twin while holding a trinket, if it has one.
+  actionFor(name) {
+    return (this.holding && this.actions[`${name}_Hold`]) || this.actions[name];
+  }
+
   play(name, fade = LAND_FADE) {
-    const action = this.actions[name] ?? Object.values(this.actions)[0];
+    const action = this.actionFor(name) ?? Object.values(this.actions)[0];
     if (!action || action === this.current) return;
-    action.reset().fadeIn(fade).play();
-    this.current?.fadeOut(fade);
+    // Same move, just grabbing or letting go: carry on from the same moment.
+    const swap = this.current && this.currentName === name;
+    action.reset();
+    if (swap) action.time = this.current.time;
+    action.fadeIn(swap ? HOLD_SWAP_FADE : fade).play();
+    this.current?.fadeOut(swap ? HOLD_SWAP_FADE : fade);
     this.current = action;
+    this.currentName = name;
+  }
+
+  /** Holding a trinket: in the water he hugs it to his chest (the _Hold clips; the
+   *  land clips have no twins, so on land he walks as usual). */
+  setHolding(holding) {
+    this.holding = holding;
+  }
+
+  /** True while a _Hold clip is playing, i.e. the trinket belongs in the chest socket. */
+  inHoldPose() {
+    return Boolean(this.current?.getClip().name.endsWith("_Hold"));
+  }
+
+  /** World transform of the trinket socket between his paws (follows every clip). */
+  holdSocket(outPos, outQuat) {
+    this.socket ??= this.model?.getObjectByName("trinket");
+    if (!this.socket) return null;
+    this.socket.getWorldPosition(outPos);
+    if (outQuat) this.socket.getWorldQuaternion(outQuat);
+    return outPos;
   }
 
   // True during the on-back float part of the surface swim (swim slower then).
   isFloating() {
-    if (this.current && this.current === this.actions.SwimFloat) return true;
-    const swim = this.actions.SwimSurface;
-    if (!swim || this.current !== swim) return false;
-    const p = swim.time / swim.getClip().duration;
+    if (this.currentName === "SwimFloat") return true;
+    if (this.currentName !== "SwimSurface") return false;
+    const p = this.current.time / this.current.getClip().duration;
     return p > FLOAT_START && p < FLOAT_END;
   }
 
@@ -183,7 +222,6 @@ export class Character {
 
     const mode = getSwimMode?.(this.root.position, this.vy) ?? "land";
     const onLand = mode === "land" || mode === "air";
-    const surfaceClip = this.actions.Surface;
     let name =
       CLIP_FOR_MODE[mode] ??
       (this.speed > WALK_SPEED_THRESHOLD ? "Walk" : "Idle");
@@ -204,40 +242,38 @@ export class Character {
 
     // Just reached the top while climbing: skip to the level-out and let the
     // head pop / shake finish before switching to the surface swim.
-    const finishingSurface =
-      mode === "surface" && surfaceClip && this.current === surfaceClip;
+    const finishingSurface = mode === "surface" && this.currentName === "Surface";
     if (finishingSurface) {
-      if (surfaceClip.time < SURFACE_CLIMB_END)
-        surfaceClip.time = SURFACE_CLIMB_END;
-      if (surfaceClip.isRunning()) name = "Surface";
+      if (this.current.time < SURFACE_CLIMB_END)
+        this.current.time = SURFACE_CLIMB_END;
+      if (this.current.isRunning()) name = "Surface";
     }
     let fade = null;
     this.updateJumpPhase(mode);
     if (this.jumpPhase) {
       name = JUMP_CLIPS[this.jumpPhase];
       fade = JUMP_FADES[this.jumpPhase];
-    } else if (this.current && this.current === this.actions.JumpLand) {
+    } else if (this.currentName === "JumpLand") {
       fade = name === "Idle" ? JUMP_HANDOFF_FADE : LAND_FADE;
     }
 
     // Slower crossfade whenever a swim clip is on either side of the switch.
-    const leavingSwim = [...Object.values(CLIP_FOR_MODE), "SwimFloat"].some(
-      (clip) => this.current === this.actions[clip],
+    const leavingSwim = [...Object.values(CLIP_FOR_MODE), "SwimFloat"].includes(
+      this.currentName,
     );
     fade ??= !onLand || leavingSwim ? SWIM_FADE : LAND_FADE;
     this.play(name, fade);
-    if (this.actions.Dive) {
-      this.actions.Dive.timeScale =
-        mode === "hover" ? HOVER_ANIMATION_SPEED : 1;
+    for (const dive of [this.actions.Dive, this.actions.Dive_Hold]) {
+      if (dive) dive.timeScale = mode === "hover" ? HOVER_ANIMATION_SPEED : 1;
     }
-    if (surfaceClip) {
-      surfaceClip.timeScale = hoverClimb ? HOVER_ANIMATION_SPEED : 1;
+    for (const surface of [this.actions.Surface, this.actions.Surface_Hold]) {
+      if (surface) surface.timeScale = hoverClimb ? HOVER_ANIMATION_SPEED : 1;
     }
     this.mixer?.update(delta);
 
     // Keep repeating the upward swim until he hits the surface.
-    if (climbing && surfaceClip && surfaceClip.time >= SURFACE_CLIMB_END) {
-      surfaceClip.time %= SURFACE_CLIMB_END;
+    if (climbing && this.currentName === "Surface" && this.current.time >= SURFACE_CLIMB_END) {
+      this.current.time %= SURFACE_CLIMB_END;
     }
   }
 
