@@ -3,9 +3,13 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/examples/jsm/utils/SkeletonUtils.js";
 import otterUrl from "../assets/models/character/Otter.glb?url";
 import { createNametag, disposeNametag } from "./nametags.js";
+import { applyToonStyle } from "./toonshading.js";
 
 const NAMETAG_GAP = 0.4;
 const MODEL_SCALE = 1.8;
+const WALK_SPEED_THRESHOLD = 0.8; // units/sec
+const SPEED_SMOOTHING = 12;
+const WALK_ANIMATION_SPEED = 1.3; // playback rate of the Walk clip
 
 const TEXTURE_URLS = Object.fromEntries(
   Object.entries(
@@ -48,6 +52,7 @@ export class Character {
     this.color = color;
     this.mixer = null;
     this.actions = {};
+    this.speed = 0;
 
     this.root = new THREE.Group();
     this.scene.add(this.root);
@@ -76,16 +81,7 @@ export class Character {
     const gltf = await loadOtterGltf();
 
     const otter = SkeletonUtils.clone(gltf.scene);
-    const material = new THREE.MeshToonMaterial({
-      map: loadTexture(this.color),
-      side: THREE.DoubleSide,
-    });
-    otter.traverse((o) => {
-      if (o.isMesh) {
-        o.material = material;
-        o.castShadow = true;
-      }
-    });
+    applyToonStyle(otter, loadTexture(this.color));
 
     otter.scale.setScalar(MODEL_SCALE);
     this.nametagHeight =
@@ -101,6 +97,9 @@ export class Character {
       for (const clip of gltf.animations) {
         this.actions[clip.name] = this.mixer.clipAction(clip);
       }
+      if (this.actions.Walk) {
+        this.actions.Walk.timeScale = WALK_ANIMATION_SPEED;
+      }
       this.play("Idle");
     }
 
@@ -115,7 +114,19 @@ export class Character {
     this.current = action;
   }
 
+  // Picks Walk or Idle from how fast the root moved since last frame, so it
+  // works the same for the local player and network-smoothed remotes.
   update(delta) {
+    const { x, z } = this.root.position;
+    if (this.lastX !== undefined && delta > 0) {
+      const speed = Math.hypot(x - this.lastX, z - this.lastZ) / delta;
+      this.speed +=
+        (speed - this.speed) * (1 - Math.exp(-SPEED_SMOOTHING * delta));
+    }
+    this.lastX = x;
+    this.lastZ = z;
+
+    this.play(this.speed > WALK_SPEED_THRESHOLD ? "Walk" : "Idle");
     this.mixer?.update(delta);
   }
 

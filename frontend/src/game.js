@@ -6,15 +6,18 @@ import { createEnvironment, collideWithGround } from "./environment.js";
 import { Character, OTTER_COLORS } from "./character.js";
 import { createChat } from "./chat.js";
 import { trackNames } from "./names.js";
+import { setToonLight, toonifyScene } from "./toonshading.js";
 
 const ARENA_HALF = 20;
 const AVATAR = { w: 1, h: 2, d: 0.6 };
-const SPEED = 7;
+const SPEED = 5.5;
 const SEND_INTERVAL = 1 / 30;
 const CAMERA_DISTANCE = 8;
 const CAMERA_HEIGHT = 4;
 const ORBIT_SPEED = 2;
 const REMOTE_SMOOTHING = 15;
+const MOUSE_SENSITIVITY = 0.0025; // radians per pixel
+const FALL_LIMIT_Y = WATER_BOTTOM - 5; // below this you respawn
 
 // Hash the id so each player gets a random-looking color that matches on every client.
 function colorFor(id) {
@@ -51,6 +54,10 @@ export async function startGame() {
   });
 
   const stepVerticalPhysics = createAquaticArea(scene).stepPhysics;
+
+  // Cel-shade everything built so far; otters are styled in Character.
+  setToonLight(-25, 35, 12); // match the sun in environment.js
+  toonifyScene(scene);
 
   // Remote players.
   const remotes = new Map(); // id -> { character, target: {x,y,z,ry} }
@@ -91,15 +98,23 @@ export async function startGame() {
   const me = new Character(scene, colorFor(net.id), net.name);
   const spawn = () => (Math.random() * 2 - 1) * (ARENA_HALF - 2);
   const player = { x: spawn(), y: 0, z: spawn(), vy: 0, ry: 0 };
+  const respawn = () => {
+    player.x = spawn();
+    player.z = spawn();
+    player.y = 0;
+    player.vy = 0;
+  };
 
   const chat = createChat({ net, camera, getCharacter: characterOf });
 
   let cameraYaw = 0;
-  let dragging = false;
-  renderer.domElement.addEventListener("pointerdown", () => (dragging = true));
-  window.addEventListener("pointerup", () => (dragging = false));
-  window.addEventListener("pointermove", (e) => {
-    if (dragging) cameraYaw -= e.movementX * 0.005;
+  // Mouse look: click the game to lock the cursor, then just move the mouse. Esc releases it.
+  const canvas = renderer.domElement;
+  const lockPointer = () => canvas.requestPointerLock()?.catch?.(() => {});
+  canvas.addEventListener("click", lockPointer);
+  lockPointer(); // may work straight away thanks to the Play button click
+  window.addEventListener("mousemove", (e) => {
+    if (document.pointerLockElement === canvas) cameraYaw -= e.movementX * MOUSE_SENSITIVITY;
   });
 
   let sendTimer = 0;
@@ -156,6 +171,7 @@ export async function startGame() {
       isOverArenaFloor(),
     );
     collideWithGround(player, ARENA_HALF);
+    if (player.y < FALL_LIMIT_Y) respawn();
 
     me.root.position.set(player.x, player.y, player.z);
     me.root.rotation.y = player.ry;

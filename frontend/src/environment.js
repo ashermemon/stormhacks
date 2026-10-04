@@ -66,6 +66,7 @@ function addGround(scene, arenaHalf) {
       materials,
     );
     block.position.set((minX + maxX) / 2, topY - height / 2, 0);
+    block.userData.noOutline = true;
     scene.add(block);
   };
 
