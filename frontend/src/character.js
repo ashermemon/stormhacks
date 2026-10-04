@@ -12,10 +12,13 @@ const SPEED_SMOOTHING = 12;
 const WALK_ANIMATION_SPEED = 1.3; // playback rate of the Walk clip
 const LAND_FADE = 0.2;
 const SWIM_FADE = 0.4; // standing -> horizontal blend reads as a flop into the water
-const HOVER_ANIMATION_SPEED = 0.4; // Dive clip rate while treading water below the surface
+const HOVER_ANIMATION_SPEED = 0.4; // clip rate while treading water below the surface
 // The on-back float in SwimSurface runs between these fractions of the clip.
 const FLOAT_START = 0.48;
 const FLOAT_END = 0.84;
+// Surface clip: 0-1.4 s is the upward swim (looped while climbing), the rest is
+// the level-out, head pop and shake, played once on reaching the top.
+const SURFACE_CLIMB_END = 1.4;
 const CLIP_FOR_MODE = {
   surface: "SwimSurface",
   dive: "Dive",
@@ -113,6 +116,10 @@ export class Character {
       if (this.actions.Walk) {
         this.actions.Walk.timeScale = WALK_ANIMATION_SPEED;
       }
+      if (this.actions.Surface) {
+        this.actions.Surface.setLoop(THREE.LoopOnce);
+        this.actions.Surface.clampWhenFinished = true;
+      }
       this.play("Idle");
     }
 
@@ -151,9 +158,25 @@ export class Character {
     this.lastZ = z;
 
     const mode = getSwimMode?.(this.root.position, this.vy) ?? "land";
-    const name =
+    const surfaceClip = this.actions.Surface;
+    let name =
       CLIP_FOR_MODE[mode] ??
       (this.speed > WALK_SPEED_THRESHOLD ? "Walk" : "Idle");
+
+    // Treading water keeps the pose of the last direction swum: climb after Shift, dive after Space.
+    if (mode === "dive" || mode === "rise") this.lastSwimDirection = mode;
+    const hoverClimb = mode === "hover" && this.lastSwimDirection === "rise";
+    if (hoverClimb) name = "Surface";
+    const climbing = mode === "rise" || hoverClimb;
+
+    // Just reached the top while climbing: skip to the level-out and let the
+    // head pop / shake finish before switching to the surface swim.
+    const finishingSurface =
+      mode === "surface" && surfaceClip && this.current === surfaceClip;
+    if (finishingSurface) {
+      if (surfaceClip.time < SURFACE_CLIMB_END) surfaceClip.time = SURFACE_CLIMB_END;
+      if (surfaceClip.isRunning()) name = "Surface";
+    }
     // Slower crossfade whenever a swim clip is on either side of the switch.
     const leavingSwim = Object.values(CLIP_FOR_MODE).some(
       (clip) => this.current === this.actions[clip],
@@ -162,7 +185,15 @@ export class Character {
     if (this.actions.Dive) {
       this.actions.Dive.timeScale = mode === "hover" ? HOVER_ANIMATION_SPEED : 1;
     }
+    if (surfaceClip) {
+      surfaceClip.timeScale = hoverClimb ? HOVER_ANIMATION_SPEED : 1;
+    }
     this.mixer?.update(delta);
+
+    // Keep repeating the upward swim until he hits the surface.
+    if (climbing && surfaceClip && surfaceClip.time >= SURFACE_CLIMB_END) {
+      surfaceClip.time %= SURFACE_CLIMB_END;
+    }
   }
 
   dispose() {
