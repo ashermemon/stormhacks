@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { connect } from "./net.js";
 import { keys } from "./input.js";
-import { createAquaticArea } from "./water.js";
+import { createAquaticArea, WATER_BOTTOM } from "./water.js";
 import { createEnvironment, collideWithGround } from "./environment.js";
 import { Character, OTTER_COLORS } from "./character.js";
 import { createChat } from "./chat.js";
