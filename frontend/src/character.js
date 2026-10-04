@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/examples/jsm/utils/SkeletonUtils.js";
 import otterUrl from "../assets/models/character/Otter.glb?url";
 import { createNametag, disposeNametag } from "./nametags.js";
+import { applyToonStyle } from "./toonshading.js";
 
 const NAMETAG_GAP = 0.4;
 const MODEL_SCALE = 1.8;
@@ -76,16 +77,7 @@ export class Character {
     const gltf = await loadOtterGltf();
 
     const otter = SkeletonUtils.clone(gltf.scene);
-    const material = new THREE.MeshToonMaterial({
-      map: loadTexture(this.color),
-      side: THREE.DoubleSide,
-    });
-    otter.traverse((o) => {
-      if (o.isMesh) {
-        o.material = material;
-        o.castShadow = true;
-      }
-    });
+    applyToonStyle(otter, loadTexture(this.color));
 
     otter.scale.setScalar(MODEL_SCALE);
     this.nametagHeight =

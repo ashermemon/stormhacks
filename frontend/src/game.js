@@ -6,6 +6,7 @@ import { createEnvironment } from "./environment.js";
 import { Character, OTTER_COLORS } from "./character.js";
 import { createChat } from "./chat.js";
 import { trackNames } from "./names.js";
+import { setToonLight, toonifyScene } from "./toonshading.js";
 
 const ARENA_HALF = 20;
 const AVATAR = { w: 1, h: 2, d: 0.6 };
@@ -51,6 +52,10 @@ export async function startGame() {
   });
 
   const stepVerticalPhysics = createAquaticArea(scene).stepPhysics;
+
+  // Cel-shade everything built so far; otters are styled in Character.
+  setToonLight(-25, 35, 12); // match the sun in environment.js
+  toonifyScene(scene);
 
   // Remote players.
   const remotes = new Map(); // id -> { character, target: {x,y,z,ry} }
