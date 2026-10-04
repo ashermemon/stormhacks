@@ -1,0 +1,6 @@
+# Caddy obtains and renews the TLS certificate automatically and proxies
+# websocket upgrades (/ws) transparently.
+otternonsense.tech, www.otternonsense.tech {
+	encode gzip
+	reverse_proxy 127.0.0.1:8765
+}

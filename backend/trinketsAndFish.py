@@ -9,12 +9,13 @@ Gambling rules: the tier is rolled at spawn and never leaves the server until th
 trinket is cracked. What is *inside* is rolled at crack time. Timing well on the
 crack rhythm raises the chance of an item from one tier higher.
 """
+import os
 import random
 import sqlite3
 import time
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent / "stormhacks.db"
+DB_PATH = Path(os.environ.get("STORMHACKS_DB", Path(__file__).resolve().parent / "stormhacks.db"))
 
 SPECIES = ("clam", "crab", "urchin", "snail", "fish")
 TIERS = ("common", "uncommon", "rare", "legendary")

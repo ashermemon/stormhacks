@@ -8,13 +8,14 @@ impersonate that player.
 Names are unique case-insensitively and can be changed.
 """
 import hashlib
+import os
 import secrets
 import sqlite3
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent / "stormhacks.db"
+DB_PATH = Path(os.environ.get("STORMHACKS_DB", Path(__file__).resolve().parent / "stormhacks.db"))
 MAX_NAME_LENGTH = 16
 
 

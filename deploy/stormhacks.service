@@ -1,0 +1,26 @@
+[Unit]
+Description=Stormhacks game server (websocket + static frontend)
+After=network.target
+
+[Service]
+Type=simple
+User=stormhacks
+Group=stormhacks
+WorkingDirectory=/opt/stormhacks
+Environment=HOST=127.0.0.1
+Environment=PORT=8765
+Environment=STORMHACKS_DB=/var/lib/stormhacks/stormhacks.db
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/stormhacks/.venv/bin/python backend/server.py
+Restart=always
+RestartSec=2
+
+# Hardening: only the data dir is writable.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/stormhacks
+
+[Install]
+WantedBy=multi-user.target

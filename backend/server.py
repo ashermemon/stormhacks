@@ -25,6 +25,7 @@ from chat import RateLimiter, clean_message
 from identity import IdentityError, IdentityStore
 from trinketsAndFish import TrinketStore, TrinketWorld
 
+HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8765"))
 STATIC_DIR = Path(
     os.environ.get("FRONTEND_DIR", Path(__file__).resolve().parent.parent / "frontend" / "dist")
@@ -228,7 +229,7 @@ async def handler(ws):
 async def main():
     async with websockets.serve(
         handler,
-        "0.0.0.0",
+        HOST,
         PORT,
         max_size=MAX_MESSAGE_BYTES,
         process_request=serve_static,
