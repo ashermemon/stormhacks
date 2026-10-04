@@ -35,7 +35,7 @@
 #trinket-prompt.show { opacity: 1; visibility: visible; }
 
 #trinket-toast { top: 30%; font-size: 32px; }
-#trinket-toast.show { animation: trinket-pop 1.1s ease-out forwards; }
+#trinket-toast.show { visibility: visible; animation: trinket-pop 1.1s ease-out forwards; }
 #trinket-toast.bad { color: #ff8a80; }
 
 @keyframes trinket-pop {
@@ -48,7 +48,7 @@
 
 /* Rhythm: a ring shrinks onto the target circle; tap F when they meet. */
 #trinket-rhythm { bottom: 8%; width: 160px; height: 160px; }
-#trinket-rhythm.show { opacity: 1; }
+#trinket-rhythm.show { opacity: 1; visibility: visible; }
 #trinket-rhythm .target,
 #trinket-rhythm .ring {
   position: absolute;
@@ -87,7 +87,7 @@
   border-radius: 12px;
   transition: opacity 0.2s;
 }
-#trinket-reveal.show { opacity: 1; }
+#trinket-reveal.show { opacity: 1; visibility: visible; }
 #trinket-reveal .tier { font-size: 30px; text-transform: uppercase; }
 #trinket-reveal.landed .tier { animation: trinket-land 0.4s ease-out; }
 #trinket-reveal .name { font-size: 36px; margin-top: 6px; }
