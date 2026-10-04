@@ -7,12 +7,16 @@ import { iconModelName, TIER_COLORS, trinketModel } from "./models.js";
 import { PIXEL_SHELL_SVG } from "./pixelShell.js";
 
 const ICON_PIXELS = 96; // each spinning model is drawn this big, shown at half size (sharp on hi-dpi)
-const ICON_SPIN = 1.2; // radians per second
+const ICON_SPIN = 0.8; // radians per second
 
 // One small offscreen renderer draws every spinning trinket, one after another, into
 // each cell's own canvas. It only runs while the journal is open.
 function createIconRenderer() {
-  const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, stencil: true });
+  const renderer = new THREE.WebGLRenderer({
+    alpha: true,
+    antialias: true,
+    stencil: true,
+  });
   renderer.setSize(ICON_PIXELS, ICON_PIXELS, false);
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
@@ -26,7 +30,9 @@ function createIconRenderer() {
       const name = iconModelName(species);
       const model = name && trinketModel(name, TIER_COLORS[tier], 1);
       if (model) {
-        const size = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3());
+        const size = new THREE.Box3()
+          .setFromObject(model)
+          .getSize(new THREE.Vector3());
         model.scale.setScalar(2 / Math.max(size.x, size.y, size.z));
       }
       models.set(key, model);
@@ -49,11 +55,7 @@ function createIconRenderer() {
   };
 }
 
-export function createJournal(
-  catalog,
-  initial,
-  onToggle,
-) {
+export function createJournal(catalog, initial, onToggle) {
   let data = initial;
   let stamps = new Set();
   let icons = null; // created the first time the journal opens
@@ -67,10 +69,7 @@ export function createJournal(
   backdrop.id = "journal-backdrop";
   backdrop.hidden = true;
 
-  backdrop.addEventListener(
-    "click",
-    () => toggle(false),
-  );
+  backdrop.addEventListener("click", () => toggle(false));
 
   document.body.appendChild(backdrop);
   document.body.appendChild(book);
@@ -81,10 +80,8 @@ export function createJournal(
         const cells = catalog.tiers
           .map((tier) => {
             const key = `${species}:${tier}`;
-            const count =
-              data.trinkets[key] ?? 0;
-            const stamp =
-              stamps.has(key) ? " stamp" : "";
+            const count = data.trinkets[key] ?? 0;
+            const stamp = stamps.has(key) ? " stamp" : "";
 
             return count
               ? `
@@ -122,16 +119,10 @@ export function createJournal(
     const finds = catalog.tiers
       .map((tier) => {
         const items = catalog.items
-          .filter(
-            (item) => item.tier === tier,
-          )
+          .filter((item) => item.tier === tier)
           .map((item) => {
-            const count =
-              data.finds[item.id] ?? 0;
-            const stamp =
-              stamps.has(item.id)
-                ? " stamp"
-                : "";
+            const count = data.finds[item.id] ?? 0;
+            const stamp = stamps.has(item.id) ? " stamp" : "";
 
             return count
               ? `
@@ -160,16 +151,15 @@ export function createJournal(
       })
       .join("");
 
-    const tierHeads =
-      catalog.tiers
-        .map(
-          (t) => `
+    const tierHeads = catalog.tiers
+      .map(
+        (t) => `
             <th style="color:${TIER_COLORS[t]}">
               ${t[0].toUpperCase()}
             </th>
           `,
-        )
-        .join("");
+      )
+      .join("");
 
     book.innerHTML = `
       <div class="page">
@@ -208,13 +198,12 @@ export function createJournal(
       spinning = 0;
       return;
     }
-    for (const canvas of book.querySelectorAll("canvas.trinket-icon")) icons.draw(canvas, now / 1000);
+    for (const canvas of book.querySelectorAll("canvas.trinket-icon"))
+      icons.draw(canvas, now / 1000);
     spinning = requestAnimationFrame(spin);
   }
 
-  function toggle(
-    open = book.hidden,
-  ) {
+  function toggle(open = book.hidden) {
     book.hidden = !open;
     backdrop.hidden = !open;
 
@@ -246,8 +235,7 @@ export function createJournal(
         return false;
       }
 
-      const shells =
-        data.shells ?? 0;
+      const shells = data.shells ?? 0;
 
       if (shells < cost) {
         return false;
