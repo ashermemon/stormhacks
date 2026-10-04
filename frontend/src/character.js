@@ -373,8 +373,11 @@ export class Character {
       await this.ready;
     }
 
-    const head =
-      this.model?.getObjectByName("head");
+    // The skeleton's "hat" bone sits on top of the head and follows every clip, so
+    // hats rest on the head instead of sinking into it. Older models without it
+    // fall back to the head bone.
+    const socket = this.model?.getObjectByName("hat");
+    const head = socket ?? this.model?.getObjectByName("head");
 
     if (!head) {
       console.warn(
@@ -401,11 +404,16 @@ export class Character {
 
     hat.name = "Hat";
 
-    hat.position.set(
-      0,
-      0.36,
-      0,
-    );
+    if (socket) {
+      // Rest the hat's base on the socket. Some hats are modelled floating above
+      // their origin (the wizard hat starts 0.12 up): drop those onto it. Hats that
+      // dip below their origin (an inner crown) keep their origin as the base.
+      hat.updateMatrixWorld(true);
+      const bottom = new THREE.Box3().setFromObject(hat).min.y;
+      hat.position.set(0, bottom > 0 ? -bottom : 0, 0);
+    } else {
+      hat.position.set(0, 0.36, 0);
+    }
 
     head.add(hat);
 
