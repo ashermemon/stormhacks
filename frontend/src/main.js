@@ -1,5 +1,6 @@
 import { startGame } from "./game.js";
 import { identity } from "./identity.js";
+import { enterFullscreen, keepFullscreen } from "./fullscreen.js";
 
 const menu = document.getElementById("menu");
 const playBtn = document.getElementById("play-btn");
@@ -20,6 +21,8 @@ playBtn.addEventListener("click", async () => {
     return;
   }
   identity.setName(name);
+  enterFullscreen(); // needs this click, so before anything async
+  keepFullscreen();
 
   playBtn.disabled = true;
   status.textContent = "Connecting...";
