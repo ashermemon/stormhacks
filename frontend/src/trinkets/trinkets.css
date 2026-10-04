@@ -106,6 +106,14 @@
 }
 
 /* Journal: a little two-page book. */
+#journal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 22, 28, 0.62);
+  backdrop-filter: blur(3px);
+  z-index: 10000;
+}
+#journal-backdrop[hidden] { display: none; }
 #journal {
   position: fixed;
   left: 50%;

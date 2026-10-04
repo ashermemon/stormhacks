@@ -77,12 +77,12 @@ function pawPosition(character, out) {
   return out.multiplyScalar(0.5);
 }
 
-export function createTrinkets({ scene, net, zones, getCharacter, swimState }) {
+export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJournalToggle }) {
   const trinkets = new Map(); // id -> see addTrinket()
   const particles = [];
   const glintTexture = makeGlintTexture();
   const particleGeometry = new THREE.IcosahedronGeometry(1, 0);
-  const journal = createJournal(net.trinketCatalog, net.journal);
+  const journal = createJournal(net.trinketCatalog, net.journal, onJournalToggle);
   let crack = null; // null | { pending } | { beats, grades, t } | { waiting }
   let reveal = null;
   let shake = 0;

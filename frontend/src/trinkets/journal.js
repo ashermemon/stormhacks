@@ -4,14 +4,18 @@
 import { TIER_COLORS } from "./models.js";
 
 const SPECIES_ICON = { clam: "🐚", crab: "🦀", urchin: "🟣", snail: "🐌" };
-
-export function createJournal(catalog, initial) {
+export function createJournal(catalog, initial, onToggle) {
   let data = initial;
   let stamps = new Set(); // entries to stamp-animate the next time the book is shown
 
   const book = document.createElement("div");
   book.id = "journal";
   book.hidden = true;
+  const backdrop = document.createElement("div");
+  backdrop.id = "journal-backdrop";
+  backdrop.hidden = true;
+  backdrop.addEventListener("click", () => toggle(false));
+  document.body.appendChild(backdrop);
   document.body.appendChild(book);
 
   function render() {
@@ -63,10 +67,13 @@ export function createJournal(catalog, initial) {
 
   function toggle(open = book.hidden) {
     book.hidden = !open;
+    backdrop.hidden = !open;
     if (open) {
       render();
       stamps = new Set(); // the stamp animation plays once
+      
     }
+    onToggle?.(open);
   }
 
   return {

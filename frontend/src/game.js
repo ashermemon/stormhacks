@@ -63,6 +63,13 @@ export async function startGame() {
 
   const aquatic = createAquaticArea(scene);
 
+  const canvas = renderer.domElement;
+  const lockPointer = () => canvas.requestPointerLock()?.catch?.(() => {});
+  const handleJournalToggle = (isOpen) => {
+    if (isOpen) document.exitPointerLock();
+    else lockPointer();
+  };
+
   // Cel-shade everything built so far; otters are styled in Character.
   setToonLight(-25, 35, 12); // match the sun in environment.js
   toonifyScene(scene);
@@ -128,12 +135,11 @@ export async function startGame() {
     zones: collectSpawnZones(scene),
     getCharacter: characterOf,
     swimState: aquatic.swimState,
+    onJournalToggle: handleJournalToggle,
   });
 
   let cameraYaw = 0;
   // Mouse look: click the game to lock the cursor, then just move the mouse. Esc releases it.
-  const canvas = renderer.domElement;
-  const lockPointer = () => canvas.requestPointerLock()?.catch?.(() => {});
   canvas.addEventListener("click", lockPointer);
   lockPointer(); // may work straight away thanks to the Play button click
   window.addEventListener("mousemove", (e) => {
