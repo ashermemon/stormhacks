@@ -2,8 +2,8 @@
 // which trinkets exist, who holds what, and what is inside. This file only draws
 // and sends requests.
 //
-// Loop:  dive -> F near a trinket to grab -> surface -> F to start cracking ->
-//        tap F on the beat -> reveal what was inside -> stamped into the journal (J).
+// Loop:  dive -> F near a trinket to grab -> surface -> F to crack ->
+//        otter turns to face the camera -> rhythm taps -> reveal -> journal (J).
 
 import * as THREE from "three";
 import { toonifyScene } from "../toonshading.js";
@@ -15,6 +15,8 @@ import "./trinkets.css";
 const GRAB_RANGE = 1.8; // from the otter's middle to the trinket
 const GRAB_FLY_TIME = 0.3; // seabed -> paws
 const CRACK_LIFT = 1.4; // how far above the paws a trinket is held while cracking
+const CRACK_TURN_SPEED = 10; // how fast the otter spins to face the camera before the rhythm
+const CRACK_TURN_DONE = 0.06; // radians — close enough to start the minigame
 const BEAT_LEAD = 1.0; // seconds before the first beat
 const BEAT_INTERVAL = 0.6;
 const PERFECT_WINDOW = 0.08; // +- seconds around the beat
@@ -25,6 +27,10 @@ const REVEAL_ROLL_TIME = 1.3; // slot-machine spin before the tier lands
 const REVEAL_HOLD_TIME = 3.0;
 const SAND = [new THREE.Color("#c8b48a"), new THREE.Color("#a08c64")];
 const BUBBLE = [new THREE.Color("#e8f7ff")];
+
+function angleDiff(from, to) {
+  return Math.atan2(Math.sin(to - from), Math.cos(to - from));
+}
 
 // ---------------------------------------------------------------------------
 // Little DOM helpers. Everything on screen is a plain element styled in trinkets.css.
@@ -63,19 +69,46 @@ function makeGlintTexture() {
   return new THREE.CanvasTexture(c);
 }
 
-// Where an otter holds things: just past both forearms, averaged.
-function pawPosition(character, out) {
+// Otter has no hand bones — paw tips sit along each forearm's local +Y.
+const PAW_ALONG = 0.18; // local units past the elbow joint toward the paw
+const _forePos = new THREE.Vector3();
+const _foreAxis = new THREE.Vector3();
+const _foreQuat = new THREE.Quaternion();
+
+/** World position (and optional orientation) of the otter's held-item spot between the paws. */
+function pawTransform(character, outPos, outQuat) {
   const model = character?.model;
-  if (!model) return character ? out.copy(character.root.position).setY(character.root.position.y + 0.8) : null;
-  const bone = (name) => model.getObjectByName(name) ?? model.getObjectByName(name.replace(".", ""));
-  const a = new THREE.Vector3(), b = new THREE.Vector3();
-  out.set(0, 0, 0);
-  for (const side of ["L", "R"]) {
-    bone(`forearm.${side}`).getWorldPosition(a);
-    bone(`upper_arm.${side}`).getWorldPosition(b);
-    out.add(a.addScaledVector(a.clone().sub(b), 0.8)); // elbow + most of a forearm length
+  if (!model) {
+    if (!character) return null;
+    outPos.copy(character.root.position);
+    outPos.y += 0.8;
+    outQuat?.copy(character.root.quaternion);
+    return outPos;
   }
-  return out.multiplyScalar(0.5);
+
+  outPos.set(0, 0, 0);
+  let count = 0;
+  for (const side of ["L", "R"]) {
+    const forearm = model.getObjectByName(`forearm.${side}`);
+    if (!forearm) continue;
+    forearm.getWorldPosition(_forePos);
+    forearm.getWorldQuaternion(_foreQuat);
+    _foreAxis.set(0, PAW_ALONG, 0).applyQuaternion(_foreQuat);
+    outPos.add(_forePos).add(_foreAxis);
+    if (outQuat) {
+      if (count === 0) outQuat.copy(_foreQuat);
+      else outQuat.slerp(_foreQuat, 0.5);
+    }
+    count++;
+  }
+  if (!count) {
+    outPos.copy(character.root.position);
+    outPos.y += 0.8;
+    outQuat?.copy(character.root.quaternion);
+    return outPos;
+  }
+  outPos.multiplyScalar(1 / count);
+  return outPos;
 }
 
 export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJournalToggle }) {
@@ -84,7 +117,7 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   const glintTexture = makeGlintTexture();
   const particleGeometry = new THREE.IcosahedronGeometry(1, 0);
   const journal = createJournal(net.trinketCatalog, net.journal, onJournalToggle);
-  let crack = null; // null | { pending } | { beats, grades, t } | { waiting }
+  let crack = null; // null | { turning } | { pending } | { beats, grades, t } | { waiting }
   let reveal = null;
   let shake = 0;
   let time = 0;
@@ -362,11 +395,11 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   // ---- input -----------------------------------------------------------------
   function pressAction() {
     if (crack?.beats) return tap();
-    if (crack) return; // waiting for the server
+    if (crack) return; // turning, waiting for the server, or finishing
     const held = myTrinket();
     if (held && swimState() === "surface") {
-      crack = { pending: true };
-      net.send({ type: "trinket_crack_begin" });
+      // Face the camera first; the rhythm starts once the turn finishes.
+      crack = { turning: true };
       return;
     }
     const near = nearestGrabbable();
@@ -385,8 +418,8 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   window.addEventListener("keydown", (e) => {
     if (e.target instanceof HTMLInputElement || e.repeat) return;
     if (e.code === "KeyJ") journal.toggle();
-    if (e.code === "Escape" && crack?.beats) {
-      net.send({ type: "trinket_crack_cancel" });
+    if (e.code === "Escape" && crack) {
+      if (crack.beats || crack.pending) net.send({ type: "trinket_crack_cancel" });
       endCrack();
     }
     if (e.code === "KeyF") pressAction();
@@ -407,6 +440,7 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   }
 
   const paw = new THREE.Vector3();
+  const holdQuat = new THREE.Quaternion();
   return {
     /** Movement and diving are frozen while cracking. */
     busy: () => crack !== null,
@@ -419,6 +453,23 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
       time += dt;
       const near = nearestGrabbable();
       const held = myTrinket();
+
+      // Spin to face the camera before the rhythm UI / server crack starts.
+      if (crack?.turning && player && camera) {
+        const faceYaw = Math.atan2(
+          camera.position.x - player.x,
+          camera.position.z - player.z,
+        );
+        const diff = angleDiff(player.ry, faceYaw);
+        player.ry += diff * (1 - Math.exp(-CRACK_TURN_SPEED * dt));
+        const character = getCharacter(net.id);
+        if (character) character.root.rotation.y = player.ry;
+        if (Math.abs(angleDiff(player.ry, faceYaw)) < CRACK_TURN_DONE) {
+          crack = { pending: true };
+          
+         setTimeout(() => net.send({ type: "trinket_crack_begin" }), 200);
+        }
+      }
 
       if (near?.species === "fish" && fishGrabHeld && !held && !crack) {
         fishGrabTime += dt;
@@ -439,7 +490,7 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
         if (t.holder) {
           t.glint.visible = false;
           const character = getCharacter(t.holder);
-          if (!pawPosition(character, paw)) {
+          if (!pawTransform(character, paw, holdQuat)) {
             t.group.visible = false;
             continue;
           }
@@ -447,12 +498,13 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
           t.grabT = Math.min(1, t.grabT + dt / GRAB_FLY_TIME);
           const k = 1 - (1 - t.grabT) ** 3; // ease out
           t.group.position.lerpVectors(t.home, paw, k);
-          t.group.position.y += Math.sin(k * Math.PI) * 0.6; // little hop on the way up
+          // Hop only while flying into the paws — once held, stay on the hands.
+          if (k < 1) t.group.position.y += Math.sin(k * Math.PI) * 0.6;
           // While cracking, hold it up over the head so the camera (behind the otter) sees it.
           // Each tap squashes it and knocks it down a little, like a bash on a rock.
           t.lift += ((t.holder === net.id && crack ? 1 : 0) - t.lift) * Math.min(1, dt * 10);
           t.group.position.y += t.lift * (CRACK_LIFT - t.wobble * 0.4);
-          t.group.quaternion.slerpQuaternions(t.homeQuaternion, character.root.quaternion, k);
+          t.group.quaternion.slerpQuaternions(t.homeQuaternion, holdQuat, k);
           const grow = 1 + Math.sin(k * Math.PI) * 0.4 + t.lift * 0.6;
           t.group.scale.set(squash, 1 / squash, squash).multiplyScalar(grow);
         } else {

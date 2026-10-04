@@ -250,6 +250,17 @@ export async function startGame() {
     me.root.rotation.y = player.ry;
     me.update(dt, aquatic.swimModeAt);
 
+    // Smooth remote players before trinkets so held items track current paw poses.
+    const t = 1 - Math.exp(-REMOTE_SMOOTHING * dt);
+    for (const { character, target } of remotes.values()) {
+      const { position, rotation } = character.root;
+      position.x += (target.x - position.x) * t;
+      position.y += (target.y - position.y) * t;
+      position.z += (target.z - position.z) * t;
+      rotation.y = lerpAngle(rotation.y, target.ry, t);
+      character.update(dt, aquatic.swimModeAt);
+    }
+
     // Third-person camera behind the player, looking at their head.
     const horizontalDistance = cameraDistance * Math.cos(cameraPitch);
     const camX = player.x + Math.sin(cameraYaw) * horizontalDistance;
@@ -281,17 +292,6 @@ export async function startGame() {
     if (sendTimer >= SEND_INTERVAL) {
       sendTimer = 0;
       net.sendState({ x: player.x, y: player.y, z: player.z, ry: player.ry });
-    }
-
-    // Smooth remote players toward their latest state.
-    const t = 1 - Math.exp(-REMOTE_SMOOTHING * dt);
-    for (const { character, target } of remotes.values()) {
-      const { position, rotation } = character.root;
-      position.x += (target.x - position.x) * t;
-      position.y += (target.y - position.y) * t;
-      position.z += (target.z - position.z) * t;
-      rotation.y = lerpAngle(rotation.y, target.ry, t);
-      character.update(dt, aquatic.swimModeAt);
     }
 
     renderer.render(scene, camera);
