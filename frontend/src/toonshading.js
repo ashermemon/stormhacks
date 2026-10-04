@@ -39,6 +39,9 @@ export const toonUniforms = {
 export const outlineUniforms = {
   thickness: { value: 3.0 }, // in pixels at 1080p (scales with screen size)
   color: { value: new THREE.Color("#3c220e") }, // dark brown ink
+  depthPush: { value: 0.06 }, // world units the outline sits behind the surface;
+  // raise if stray lines show in creases, lower if
+  // outlines vanish where objects touch
 };
 
 export function setToonLight(x, y, z) {
@@ -138,6 +141,7 @@ const outlineVert = /* glsl */ `
   #include <skinning_pars_vertex>
   attribute vec3 outlineNormal;          // smoothed normals, so hard-edged props don't crack open
   uniform float thickness;
+  uniform float depthPush;
   void main() {
     float w = 1.0;
     #ifdef OTTER_MASK
@@ -159,6 +163,11 @@ const outlineVert = /* glsl */ `
     #include <begin_vertex>
     #include <skinning_vertex>
     #include <project_vertex>
+
+    // Shove the hull away from the camera so it can only show past the silhouette,
+    // never through creases (armpits, ear bumps, where parts meet).
+    vec3 away = isOrthographic ? vec3(0.0, 0.0, -1.0) : normalize(mvPosition.xyz);
+    gl_Position = projectionMatrix * vec4(mvPosition.xyz + away * depthPush, 1.0);
 
     vec2 dir = (normalMatrix * objectNormal).xy;
     float len = length(dir);

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { connect } from "./net.js";
 import { keys } from "./input.js";
-import { createAquaticArea } from "./water.js";
+import { createAquaticArea, WATER_BOTTOM } from "./water.js";
 import { createEnvironment } from "./environment.js";
 import { Character, OTTER_COLORS } from "./character.js";
 import { createChat } from "./chat.js";
@@ -16,6 +16,8 @@ const CAMERA_DISTANCE = 8;
 const CAMERA_HEIGHT = 4;
 const ORBIT_SPEED = 2;
 const REMOTE_SMOOTHING = 15;
+const MOUSE_SENSITIVITY = 0.0025; // radians per pixel
+const FALL_LIMIT_Y = WATER_BOTTOM - 5; // below this you respawn
 
 // Hash the id so each player gets a random-looking color that matches on every client.
 function colorFor(id) {
@@ -96,6 +98,12 @@ export async function startGame() {
   const me = new Character(scene, colorFor(net.id), net.name);
   const spawn = () => (Math.random() * 2 - 1) * (ARENA_HALF - 2);
   const player = { x: spawn(), y: 0, z: spawn(), vy: 0, ry: 0 };
+  const respawn = () => {
+    player.x = spawn();
+    player.z = spawn();
+    player.y = 0;
+    player.vy = 0;
+  };
 
   const chat = createChat({ net, camera, getCharacter: characterOf });
 
@@ -106,7 +114,7 @@ export async function startGame() {
   canvas.addEventListener("click", lockPointer);
   lockPointer(); // may work straight away thanks to the Play button click
   window.addEventListener("mousemove", (e) => {
-    if (document.pointerLockElement === canvas) cameraYaw -= e.movementX * 0.005;
+    if (document.pointerLockElement === canvas) cameraYaw -= e.movementX * MOUSE_SENSITIVITY;
   });
 
   let sendTimer = 0;
@@ -162,6 +170,7 @@ export async function startGame() {
       dt,
       isOverArenaFloor(),
     );
+    if (player.y < FALL_LIMIT_Y) respawn();
 
     me.root.position.set(player.x, player.y, player.z);
     me.root.rotation.y = player.ry;
