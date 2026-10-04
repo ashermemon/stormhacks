@@ -11,6 +11,9 @@ import { setToonLight, toonifyScene } from "./toonshading.js";
 const ARENA_HALF = 20;
 const AVATAR = { w: 1, h: 1, d: 1 };
 const SPEED = 5.5;
+const SURFACE_SWIM_SPEED = 2.5;
+const FLOAT_SWIM_SPEED = 0.8; // drifting on his back during the SwimSurface float
+const UNDERWATER_SWIM_SPEED = 3;
 const SEND_INTERVAL = 1 / 30;
 const CAMERA_DISTANCE = 8;
 const CAMERA_HEIGHT = 4;
@@ -53,7 +56,7 @@ export async function startGame() {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  const stepVerticalPhysics = createAquaticArea(scene).stepPhysics;
+  const aquatic = createAquaticArea(scene);
 
   // Cel-shade everything built so far; otters are styled in Character.
   setToonLight(-25, 35, 12); // match the sun in environment.js
@@ -161,10 +164,19 @@ export async function startGame() {
     if (len > 0) {
       dx /= len;
       dz /= len;
+      const swimState = aquatic.swimState();
+      const speed =
+        swimState === "surface"
+          ? me.isFloating()
+            ? FLOAT_SWIM_SPEED
+            : SURFACE_SWIM_SPEED
+          : swimState === "under"
+            ? UNDERWATER_SWIM_SPEED
+            : SPEED;
       environment.resolveHorizontalMovement(
         player,
-        dx * SPEED * dt,
-        dz * SPEED * dt,
+        dx * speed * dt,
+        dz * speed * dt,
         AVATAR.w / 2,
         AVATAR.h,
       );
@@ -177,12 +189,12 @@ export async function startGame() {
     player.x = Math.max(-limit, Math.min(limit, player.x));
     player.z = Math.max(-limit, Math.min(limit, player.z));
 
-    stepVerticalPhysics(
+    aquatic.stepPhysics(
       player,
       {
         jumpDown: keys.jump(),
-        upward: keys.upward(),
-        downward: keys.downward(),
+        dive: keys.dive(),
+        rise: keys.rise(),
       },
       dt,
       isOverArenaFloor(),
@@ -192,7 +204,7 @@ export async function startGame() {
 
     me.root.position.set(player.x, player.y, player.z);
     me.root.rotation.y = player.ry;
-    me.update(dt);
+    me.update(dt, aquatic.swimModeAt);
 
     // Third-person camera behind the player, looking at their head.
     camera.position.set(
@@ -228,7 +240,7 @@ export async function startGame() {
       position.y += (target.y - position.y) * t;
       position.z += (target.z - position.z) * t;
       rotation.y = lerpAngle(rotation.y, target.ry, t);
-      character.update(dt);
+      character.update(dt, aquatic.swimModeAt);
     }
 
     renderer.render(scene, camera);
