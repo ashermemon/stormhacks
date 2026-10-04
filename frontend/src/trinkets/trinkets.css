@@ -13,6 +13,7 @@
   z-index: 10000;
   text-align: center;
   opacity: 0;
+  visibility: hidden;
 }
 
 #trinket-prompt {
@@ -30,7 +31,7 @@
   border: 2px solid #fff;
   border-radius: 4px;
 }
-#trinket-prompt.show { opacity: 1; }
+#trinket-prompt.show { opacity: 1; visibility: visible; }
 
 #trinket-toast { top: 30%; font-size: 32px; }
 #trinket-toast.show { animation: trinket-pop 1.1s ease-out forwards; }

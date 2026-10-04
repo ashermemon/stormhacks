@@ -23,7 +23,7 @@ from websockets.http11 import Response
 
 from chat import RateLimiter, clean_message
 from identity import IdentityError, IdentityStore
-from trinkets import TrinketStore, TrinketWorld
+from trinketsAndFish import TrinketStore, TrinketWorld
 
 PORT = int(os.environ.get("PORT", "8765"))
 STATIC_DIR = Path(

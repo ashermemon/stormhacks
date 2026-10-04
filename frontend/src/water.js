@@ -70,7 +70,13 @@ export function createAquaticArea(scene) {
       player.vy -= GRAVITY * dt;
       player.y += player.vy * dt;
       if (onWater && player.y <= waterSurface) {
-        swimState = "surface";
+        if (player.vy < -0.5) {
+          // A jump landing in the water carries its downward momentum into a sink animation.
+          swimState = "under";
+          player.vy = -Math.min(14, Math.abs(player.vy) * 1.4);
+        } else {
+          swimState = "surface";
+        }
       } else if (!onWater && overArenaFloor && player.y <= 0) {
         player.y = 0;
         player.vy = 0;
@@ -84,15 +90,19 @@ export function createAquaticArea(scene) {
     }
 
     if (swimState === "under") {
-      player.vy = 0;
       if (controls.dive) {
         // The tilt is baked into the Dive clip, so travel along that same angle.
         const step = DIVE_SPEED * dt;
         player.x += Math.sin(player.ry) * Math.cos(DIVE_ANGLE) * step;
         player.z += Math.cos(player.ry) * Math.cos(DIVE_ANGLE) * step;
         player.y -= Math.sin(DIVE_ANGLE) * step;
+        player.vy = 0;
       } else if (controls.rise) {
         player.y += RISE_SPEED * dt;
+        player.vy = 0;
+      } else {
+        player.y += player.vy * dt;
+        player.vy *= Math.exp(-3.5 * dt);
       }
       if (player.y >= waterSurface) {
         player.y = waterSurface;

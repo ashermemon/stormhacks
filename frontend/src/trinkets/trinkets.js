@@ -19,6 +19,7 @@ const BEAT_LEAD = 1.0; // seconds before the first beat
 const BEAT_INTERVAL = 0.6;
 const PERFECT_WINDOW = 0.08; // +- seconds around the beat
 const GOOD_WINDOW = 0.18;
+const FISH_HOLD_SECONDS = 2;
 const MISS = 0, GOOD = 1, PERFECT = 2;
 const REVEAL_ROLL_TIME = 1.3; // slot-machine spin before the tier lands
 const REVEAL_HOLD_TIME = 3.0;
@@ -88,6 +89,8 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   let shake = 0;
   let time = 0;
   let player = null;
+  let fishGrabHeld = false;
+  let fishGrabTime = 0;
 
   const prompt = div("trinket-prompt");
   const toast = div("trinket-toast");
@@ -375,7 +378,15 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
       return;
     }
     const near = nearestGrabbable();
+    if (near?.species === "fish") {
+      fishGrabHeld = true;
+      fishGrabTime = 0;
+      return;
+    }
     if (near) net.send({ type: "trinket_grab", id: near.id });
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.code === "KeyF") fishGrabHeld = false;
   });
 
   // ---- per frame ---------------------------------------------------------------
@@ -384,7 +395,11 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
     if (crack) text = "";
     else if (held && swimState() === "surface") text = "<b>F</b> crack it open!";
     else if (held) text = "Surface to the waterline to crack it open! <b>Shift</b> ⬆";
-    else if (near) text = `<b>F</b> grab the ${near.species}`;
+    else if (near) {
+      text = near.species === "fish"
+        ? "<b>Hold F</b> for 2 seconds to collect the fish"
+        : `<b>F</b> grab the ${near.species}`;
+    }
     if (prompt.innerHTML !== text) prompt.innerHTML = text;
     prompt.className = text ? "show" : "";
   }
@@ -399,6 +414,17 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
       time += dt;
       const near = nearestGrabbable();
       const held = myTrinket();
+
+      if (near?.species === "fish" && fishGrabHeld && !held && !crack) {
+        fishGrabTime += dt;
+        if (fishGrabTime >= FISH_HOLD_SECONDS) {
+          net.send({ type: "trinket_grab", id: near.id });
+          fishGrabHeld = false;
+          fishGrabTime = 0;
+        }
+      } else if (near?.species !== "fish") {
+        fishGrabTime = 0;
+      }
 
       for (const t of trinkets.values()) {
         t.wobble = Math.max(0, t.wobble - dt * 4);

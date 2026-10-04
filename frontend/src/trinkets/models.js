@@ -132,7 +132,19 @@ function snail(random, hue) {
   return { group, colors: [shell, stripe] };
 }
 
-const BUILDERS = { clam, crab, urchin, snail };
+function fish(random, hue) {
+  const color = new THREE.Color().setHSL((0.52 + hue * 0.3) % 1, 0.65, 0.52);
+  const group = new THREE.Group();
+  const body = mesh(new THREE.SphereGeometry(0.25, 8, 5), color);
+  body.scale.set(1.5, 0.65, 0.65);
+  const tail = mesh(new THREE.ConeGeometry(0.16, 0.35, 4), color.clone().multiplyScalar(0.8));
+  tail.rotation.z = -Math.PI / 2;
+  tail.position.x = -0.4;
+  group.add(body, tail);
+  return { group, colors: [color, color.clone().multiplyScalar(0.8)] };
+}
+
+const BUILDERS = { clam, crab, urchin, snail, fish };
 
 /** Build a trinket. Returns { group, colors } — colors are used for crack shards. */
 export function buildTrinket(species, seed) {

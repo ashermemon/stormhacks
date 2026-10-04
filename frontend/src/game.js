@@ -7,6 +7,7 @@ import { Character, OTTER_COLORS } from "./character.js";
 import { createChat } from "./chat.js";
 import { trackNames } from "./names.js";
 import { setToonLight, toonifyScene } from "./toonshading.js";
+import { createFish } from "./fish.js";
 import { createTrinkets } from "./trinkets/trinkets.js";
 import { collectSpawnZones, createStandInZone } from "./trinkets/spawnZones.js";
 
@@ -62,6 +63,7 @@ export async function startGame() {
   });
 
   const aquatic = createAquaticArea(scene);
+  const fish = createFish(scene, 12);
 
   const canvas = renderer.domElement;
   const lockPointer = () => canvas.requestPointerLock()?.catch?.(() => {});
@@ -177,6 +179,7 @@ export async function startGame() {
   };
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.1);
+    fish.update(dt, player);
 
     cameraYaw += keys.orbit() * ORBIT_SPEED * dt;
 

@@ -16,11 +16,12 @@ from pathlib import Path
 
 DB_PATH = Path(__file__).resolve().parent / "stormhacks.db"
 
-SPECIES = ("clam", "crab", "urchin", "snail")
+SPECIES = ("clam", "crab", "urchin", "snail", "fish")
 TIERS = ("common", "uncommon", "rare", "legendary")
 SPAWN_WEIGHTS = (60, 28, 10, 2)  # per tier, same order as TIERS
 BEATS = (4, 6)  # taps per crack, rolled per crack so the count never hints at the tier
 TARGET_COUNT = 40  # trinkets lying on the seabed or in paws at any time
+FISH_COUNT = 12  # dedicated collectible fish in addition to the regular trinket pool
 
 BUMP_CHANCE = 0.08  # chance the contents come from the next tier up
 PERFECT_BUMP_CHANCE = 0.25  # same, if every tap was perfect
@@ -136,12 +137,14 @@ class TrinketWorld:
         self._next_id = 1
         while len(self.trinkets) < TARGET_COUNT:
             self._spawn()
+        for _ in range(FISH_COUNT):
+            self._spawn("fish")
 
-    def _spawn(self):
+    def _spawn(self, species=None):
         trinket = {
             "id": self._next_id,
             "seed": self.rng.getrandbits(31),
-            "species": self.rng.choice(SPECIES),
+            "species": species or self.rng.choice(SPECIES),
             "tier": self.rng.choices(TIERS, SPAWN_WEIGHTS)[0],
             "holder": None,
         }

@@ -3,7 +3,7 @@
 
 import { TIER_COLORS } from "./models.js";
 
-const SPECIES_ICON = { clam: "🐚", crab: "🦀", urchin: "🟣", snail: "🐌" };
+const SPECIES_ICON = { clam: "🐚", crab: "🦀", urchin: "🟣", snail: "🐌", fish: "🐟" };
 export function createJournal(catalog, initial, onToggle) {
   let data = initial;
   let stamps = new Set(); // entries to stamp-animate the next time the book is shown
