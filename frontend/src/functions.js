@@ -3,7 +3,7 @@ export function isOnWater(player, water) {
   const halfDepth = water.geometry.parameters.depth / 2;
 
   const waterBottom =
-    water.position.y - water.geometry.parameters.height / 2;
+    water.position.y - water.geometry.parameters.height / 2 - 1;
 
   const waterSurface =
     water.position.y + water.geometry.parameters.height / 2;

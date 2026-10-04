@@ -3,6 +3,8 @@ import { WATER_BOTTOM, WATER_WIDTH } from "./water.js";
 
 const GROUND_TOP = -0.08;
 const GROUND_BOTTOM = WATER_BOTTOM - 2;
+const WATER_FLOOR_Y = WATER_BOTTOM - 0.1;
+
 
 function addTree(scene, x, z, scale = 1) {
   const tree = new THREE.Group();
@@ -69,9 +71,9 @@ function addGround(scene, arenaHalf) {
   };
 
   const channelHalf = WATER_WIDTH / 2;
-  addBlock(-arenaHalf, -channelHalf, GROUND_TOP, grassTop);
-  addBlock(channelHalf, arenaHalf, GROUND_TOP, grassTop);
-  addBlock(-channelHalf, channelHalf, WATER_BOTTOM, dirt);
+  addBlock(-arenaHalf, -channelHalf + 0.1, GROUND_TOP, grassTop);
+  addBlock(channelHalf + 0.1, arenaHalf, GROUND_TOP, grassTop);
+  addBlock(-channelHalf, channelHalf, WATER_BOTTOM - 0.1, dirt);
 }
 
 export function createEnvironment(scene, arenaHalf) {
@@ -166,4 +168,20 @@ function shrinkCollisionBox(box, factor) {
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3()).multiplyScalar(factor);
   return new THREE.Box3().setFromCenterAndSize(center, size);
+}
+
+
+export function collideWithGround(player, arenaHalf) {
+  if (player.y < WATER_FLOOR_Y) {
+    player.y = WATER_FLOOR_Y;
+    player.vy = 0;
+  }
+
+  if (player.x < -arenaHalf) {
+    player.x = -arenaHalf;
+  }
+
+  if (player.x > arenaHalf) {
+    player.x = arenaHalf;
+  }
 }
