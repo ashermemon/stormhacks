@@ -27,6 +27,7 @@ from trinketsAndFish import TrinketStore, TrinketWorld
 
 HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8765"))
+MAX_PLAYERS = int(os.environ.get("MAX_PLAYERS", "20"))  # lobby cap; set the env var to change
 STATIC_DIR = Path(
     os.environ.get("FRONTEND_DIR", Path(__file__).resolve().parent.parent / "frontend" / "dist")
 ).resolve()
@@ -100,6 +101,18 @@ async def authenticate(ws):
         return None
     if not isinstance(msg, dict) or msg.get("type") != "hello":
         return None
+    # Full lobby: only someone already online (a refresh or second tab) may take over their
+    # own slot. Checked before login so a rejected newcomer is never saved to the database
+    # (otherwise their retry would fail with "name already taken").
+    if len(players) >= MAX_PLAYERS and store.id_for_token(msg.get("token")) not in players:
+        await send(
+            ws,
+            {
+                "type": "error",
+                "message": f"The lobby is full ({MAX_PLAYERS}/{MAX_PLAYERS} otters). Please try again in a minute!",
+            },
+        )
+        return None
     try:
         return store.login(msg.get("token"), msg.get("name"))
     except IdentityError as error:
@@ -123,6 +136,7 @@ async def handler(ws):
 
     chat_limit = RateLimiter(CHAT_INTERVAL)
     rename_limit = RateLimiter(RENAME_INTERVAL)
+    warn_limit = RateLimiter(2)  # don't answer a flood with a flood of "too fast" errors
 
     try:
         if old is not None:
@@ -170,7 +184,8 @@ async def handler(ws):
                 if text is None:
                     continue
                 if not chat_limit.allow():
-                    await send(ws, {"type": "error", "message": "You are sending messages too fast."})
+                    if warn_limit.allow():
+                        await send(ws, {"type": "error", "message": "You are sending messages too fast."})
                     continue
                 await broadcast({"type": "chat", "id": pid, "name": names[pid], "text": text})
 

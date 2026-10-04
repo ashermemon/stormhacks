@@ -1,0 +1,10 @@
+[Unit]
+Description=Back up the Stormhacks database
+
+[Service]
+Type=oneshot
+User=stormhacks
+Group=stormhacks
+# Hourly snapshot (last 48 kept); the 04:xx run also keeps a daily one (last 14 kept).
+ExecStart=/opt/stormhacks/deploy/backup.sh hourly 48
+ExecStart=/bin/bash -c '[ "$(date +%%H)" = 04 ] && /opt/stormhacks/deploy/backup.sh daily 14 || true'

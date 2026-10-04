@@ -5,7 +5,6 @@ set -euo pipefail
 
 APP_DIR=/opt/stormhacks
 DATA_DIR=/var/lib/stormhacks
-DB="$DATA_DIR/stormhacks.db"
 BRANCH=main
 FIRST_RUN=0
 [ "${1:-}" = "--first-run" ] && FIRST_RUN=1
@@ -27,16 +26,8 @@ changed() {  # did any of these paths change between old and new?
   [ "$FIRST_RUN" = 1 ] || ! git diff --quiet "$old" "$new" -- "$@"
 }
 
-# Snapshot the DB (consistent, via SQLite backup API) before touching anything.
-if [ -f "$DB" ]; then
-  stamp=$(date +%Y%m%d-%H%M%S)
-  .venv/bin/python - "$DB" "$DATA_DIR/backups/stormhacks-$stamp.db" <<'PY'
-import sqlite3, sys
-src = sqlite3.connect(sys.argv[1]); dst = sqlite3.connect(sys.argv[2])
-src.backup(dst); dst.close(); src.close()
-PY
-  ls -1t "$DATA_DIR"/backups/stormhacks-*.db | tail -n +31 | xargs -r rm --
-fi
+# Snapshot the DB before touching anything (last 10 pre-deploy copies kept).
+"$APP_DIR/deploy/backup.sh" predeploy 10
 
 # The DB is outside the checkout and *.db is gitignored, so reset is safe.
 git reset --hard "origin/$BRANCH"

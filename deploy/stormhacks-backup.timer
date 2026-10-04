@@ -1,0 +1,10 @@
+[Unit]
+Description=Hourly Stormhacks database backup
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=120
+Persistent=true
+
+[Install]
+WantedBy=timers.target

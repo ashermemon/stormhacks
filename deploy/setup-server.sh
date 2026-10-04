@@ -56,8 +56,11 @@ visudo -cf /etc/sudoers.d/stormhacks
 sudo -u "$APP_USER" bash "$APP_DIR/deploy/deploy.sh" --first-run
 install -m 644 "$APP_DIR/deploy/stormhacks.service" /etc/systemd/system/stormhacks.service
 install -m 644 "$APP_DIR/deploy/Caddyfile" /etc/caddy/Caddyfile
+install -m 644 "$APP_DIR/deploy/stormhacks-backup.service" /etc/systemd/system/stormhacks-backup.service
+install -m 644 "$APP_DIR/deploy/stormhacks-backup.timer" /etc/systemd/system/stormhacks-backup.timer
 systemctl daemon-reload
 systemctl enable --now stormhacks
+systemctl enable --now stormhacks-backup.timer
 systemctl reload caddy || systemctl restart caddy
 
 # Firewall: SSH + HTTP/HTTPS only (8765 stays private on 127.0.0.1)

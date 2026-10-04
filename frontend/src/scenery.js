@@ -49,6 +49,10 @@ const BENCH_SPACING = 45; // at least this far apart, so the few there are sprea
 const VIEW_LIMIT = 170; // past the fog (environment.js), nothing needs drawing
 const FADE_BAND = 0.2; // each instance dissolves over the last 20% of its draw distance...
 const MIN_FADE_BAND = 2; // ...but over at least this many units
+// Seaweed and sea grass (kinds with `bed: true`) grow on the stream and pond floors. Seen
+// from above the water, past this distance they are skipped; underwater, or close to the
+// water, they draw as usual.
+const BED_VISIBLE_RADIUS = 12;
 
 // How each kind of prop is drawn. cell: chunk size (smaller = finer culling).
 // Within `near` every instance draws; it thins to `minFrac` at `far`, then hides.
@@ -57,8 +61,8 @@ const KINDS = {
   tallGrass: { model: "Grass_Common_Tall", cell: 16, near: 25, far: 80, minFrac: 0.2 },
   shortGrass: { model: "Grass_Common_Short", cell: 16, near: 20, far: 60, minFrac: 0.2 },
   reeds: { model: "Grass_Common_Tall", cell: 16, near: 30, far: 90, minFrac: 0.3 },
-  seaweed: { model: "Grass_Common_Tall", material: "seaweed", cell: 16, near: 25, far: 60, minFrac: 0.3 },
-  seaGrass: { model: "Grass_Common_Short", material: "seaweed", cell: 16, near: 20, far: 50, minFrac: 0.3 },
+  seaweed: { model: "Grass_Common_Tall", material: "seaweed", bed: true, cell: 16, near: 25, far: 60, minFrac: 0.3 },
+  seaGrass: { model: "Grass_Common_Short", material: "seaweed", bed: true, cell: 16, near: 20, far: 50, minFrac: 0.3 },
   flowers3: { model: "Flower_3_Group", cell: 16, near: 25, far: 80, minFrac: 0.25 },
   flowers4: { model: "Flower_4_Group", cell: 16, near: 25, far: 80, minFrac: 0.25 },
   bush: { model: "Bush_Common_Flowers", cell: 24, near: 50, far: 140, minFrac: 0.5 },
@@ -143,7 +147,8 @@ export async function createScenery(scene, world, { clearings = [] } = {}) {
         let frac = 1;
         if (d >= far) frac = 0;
         else if (d > near) frac = minFrac + (1 - minFrac) * (1 - (d - near) / (far - near));
-        const count = Math.ceil(chunk.size * frac);
+        const aboveWater = cam.y > WATER_SURFACE_Y + 0.5;
+        const count = chunk.bed && aboveWater && d > BED_VISIBLE_RADIUS ? 0 : Math.ceil(chunk.size * frac);
         chunk.group.visible = count > 0;
         for (const mesh of chunk.meshes) mesh.count = count;
       }
@@ -894,6 +899,7 @@ class Scatter {
         chunks.push({
           group,
           meshes,
+          bed: Boolean(kind.bed),
           size: list.length,
           lod,
           cx: (i + 0.5) * kind.cell - half,

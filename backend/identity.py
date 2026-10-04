@@ -69,6 +69,15 @@ class IdentityStore:
         ).fetchone()
         return row is not None and row[0] != except_id
 
+    def id_for_token(self, token):
+        """The player id a token belongs to, or None. Read-only: never creates anything."""
+        if not isinstance(token, str) or not token:
+            return None
+        row = self.db.execute(
+            "SELECT id FROM identities WHERE token_hash = ?", (_hash(token),)
+        ).fetchone()
+        return row[0] if row else None
+
     def login(self, token, name):
         """Return (token, Identity). Unknown or missing token creates a new identity.
 
