@@ -110,12 +110,20 @@ const WHITE = new THREE.Color(1, 1, 1);
  * @param scene   the scene to add the props to (call before toonifyScene)
  * @param world   what loadWorld returned
  * @param clearings  [{x, z, r}] spots kept free of trees and rocks (e.g. the spawn)
+ * @param campNear   {x, z} to put the campfire spot a short walk from (e.g. the spawn)
  */
-export async function createScenery(scene, world, { clearings = [] } = {}) {
+export async function createScenery(scene, world, { clearings = [], campNear = null } = {}) {
   const models = await loadModels();
   const field = buildField(world);
   const scatter = new Scatter(models, field);
-  placeEverything(scatter, field, world, clearings);
+  // The campfire spot is picked first, so trees, rocks and bushes keep clear of it.
+  const campsite = campNear ? findCampsite(field, campNear) : null;
+  const allClearings = campsite ? [...clearings, { x: campsite.x, z: campsite.z, r: CAMP_RADIUS }] : clearings;
+  placeEverything(scatter, field, world, allClearings);
+  if (campsite) {
+    const growth = ["meadowGrass", "tallGrass", "shortGrass", "flowers3", "flowers4"];
+    scatter.clearAround(campsite.x, campsite.z, CAMP_RADIUS - 0.3, growth);
+  }
   const chunks = scatter.build(scene);
 
   // Benches, for sitting on (seating.js): heading plus the seat and stand spots in world space.
@@ -137,6 +145,7 @@ export async function createScenery(scene, world, { clearings = [] } = {}) {
   const cam = new THREE.Vector3();
   return {
     benches,
+    campsite, // {x, y, z} for campfire.js, or null
     update(camera) {
       camera.getWorldPosition(cam);
       for (const chunk of chunks) {
@@ -505,6 +514,52 @@ function makeNoise(seed) {
 // ---------------------------------------------------------------------------
 // Placement
 // ---------------------------------------------------------------------------
+const CAMP_DISTANCE = 16; // the campfire sits about this far from `campNear`
+const CAMP_RADIUS = 6; // its footprint: the fire, the log seats and room to walk round
+
+// A cozy spot for the campfire: flat, dry meadow a short walk from `near`, away from
+// the water and the foot of the mountains. Null if there's nowhere suitable.
+function findCampsite(field, near) {
+  const { ground, zone, waterDist, wildDist } = field;
+  let best = null;
+  let bestScore = Infinity;
+  for (let dz = -30; dz <= 30; dz += 2) {
+    for (let dx = -30; dx <= 30; dx += 2) {
+      const distance = Math.hypot(dx, dz);
+      if (distance < 10 || distance > 30) continue;
+      const x = near.x + dx;
+      const z = near.z + dz;
+      if (zone(x, z) !== GRASS || waterDist(x, z) < 7 || wildDist(x, z) < 8) continue;
+      // The whole footprint has to be dry, grassy and nearly level.
+      let low = ground(x, z);
+      let high = low;
+      let fits = true;
+      for (let k = 0; k < 12 && fits; k++) {
+        const angle = (k / 12) * Math.PI * 2;
+        for (const r of [2.5, CAMP_RADIUS]) {
+          const px = x + Math.cos(angle) * r;
+          const pz = z + Math.sin(angle) * r;
+          const h = ground(px, pz);
+          if (zone(px, pz) !== GRASS || h < WATER_SURFACE_Y + 0.2) fits = false;
+          low = Math.min(low, h);
+          high = Math.max(high, h);
+        }
+      }
+      if (!fits) continue;
+      const score = Math.abs(distance - CAMP_DISTANCE) * 0.2 + (high - low) * 10;
+      if (score < bestScore) {
+        bestScore = score;
+        best = { x, z };
+      }
+    }
+  }
+  if (!best) return null;
+  // Which way the nearest water lies: where the distance to it falls fastest.
+  const gx = waterDist(best.x + 2, best.z) - waterDist(best.x - 2, best.z);
+  const gz = waterDist(best.x, best.z + 2) - waterDist(best.x, best.z - 2);
+  const length = Math.hypot(gx, gz) || 1;
+  return { ...best, y: ground(best.x, best.z), toWater: { x: -gx / length, z: -gz / length } };
+}
 function placeEverything(scatter, field, world, clearings) {
   const { ground, zone, slope, waterDist, wildDist, footing, inCave, meadowLight, mapHalf } = field;
   const random = seededRandom(SEED);

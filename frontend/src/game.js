@@ -11,6 +11,7 @@ import { trackNames } from "./names.js";
 import { toonifyScene, updateWind } from "./toonshading.js";
 import { createScenery } from "./scenery.js";
 import { createSeating } from "./seating.js";
+import { createCampfire } from "./campfire.js";
 import { createFish } from "./fish.js";
 import { createTrinkets } from "./trinkets/trinkets.js";
 import { collectSpawnZones } from "./trinkets/spawnZones.js";
@@ -53,7 +54,11 @@ function lerpAngle(a, b, t) {
   return a + diff * t;
 }
 
-export async function startGame() {
+/**
+ * Builds everything that doesn't need the server: sky, terrain, water, scenery and fish,
+ * plus the renderer. The menu shows it behind itself (menuTour.js) until Play.
+ */
+export async function loadScene() {
   const scene = new THREE.Scene();
   const environment = createEnvironment(scene);
   const world = await loadWorld();
@@ -63,7 +68,12 @@ export async function startGame() {
   // Grass, flowers, trees, rocks and seaweed; keeps the spawn meadow open.
   const scenery = await createScenery(scene, world, {
     clearings: [{ x: SPAWN.x, z: SPAWN.z, r: 5 }],
+    campNear: SPAWN,
   });
+  // A campfire with log seats, a short walk from the spawn.
+  const campfire = scenery.campsite
+    ? await createCampfire(scene, world, scenery.campsite, { openToward: SPAWN })
+    : null;
 
   const camera = new THREE.PerspectiveCamera(
     70,
@@ -91,15 +101,22 @@ export async function startGame() {
   const zones = collectSpawnZones(world.root);
   const fish = createFish(scene, 12, { getGroundHeight, zones });
 
+  // Cel-shade everything built so far (the water keeps its own shader); otters are styled in Character.
+  toonifyScene(scene);
+
+  return { scene, environment, world, scenery, campfire, camera, renderer, aquatic, zones, fish };
+}
+
+/** Connects and starts playing in a scene from loadScene(). */
+export async function startGame(view) {
+  const { scene, environment, world, scenery, campfire, camera, renderer, aquatic, zones, fish } = view;
+  const { getGroundHeight } = world;
   const canvas = renderer.domElement;
   const lockPointer = () => canvas.requestPointerLock()?.catch?.(() => {});
   const handleJournalToggle = (isOpen) => {
     if (isOpen) document.exitPointerLock();
     else if (!document.body.classList.contains("has-mobile-controls")) lockPointer();
   };
-
-  // Cel-shade everything built so far (the water keeps its own shader); otters are styled in Character.
-  toonifyScene(scene);
 
   // Remote players.
   const remotes = new Map(); // id -> { character, target: {x,y,z,ry} }
@@ -167,7 +184,7 @@ export async function startGame() {
       wizardHat: true,
     },
   };
-  const seating = createSeating(scenery.benches, me);
+  const seating = createSeating([...scenery.benches, ...(campfire?.seats ?? [])], me);
   const cameraFocus = new THREE.Vector3(player.x, player.y, player.z);
   let cameraGlide = 0;
   let lastPose = null;
@@ -347,6 +364,7 @@ export async function startGame() {
     camera.lookAt(cameraFocus.x, cameraFocus.y + AVATAR_HEIGHT, cameraFocus.z);
     scenery.update(camera);
     environment.update(camera, clock.elapsedTime);
+    campfire?.update(clock.elapsedTime);
     trinkets.update(dt, player, camera);
 
     // Network.
