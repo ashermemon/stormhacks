@@ -16,6 +16,8 @@ const HOVER_ANIMATION_SPEED = 0.4; // clip rate while treading water below the s
 // The on-back float in SwimSurface runs between these fractions of the clip.
 const FLOAT_START = 0.48;
 const FLOAT_END = 0.84;
+const CLIP_FPS = 24;
+const SURFACE_IDLE_SPEED = 0.3; // below this at the surface he just floats on his back
 // Surface clip: 0-1.4 s is the upward swim (looped while climbing), the rest is
 // the level-out, head pop and shake, played once on reaching the top.
 const SURFACE_CLIMB_END = 1.4;
@@ -116,6 +118,21 @@ export class Character {
       if (this.actions.Walk) {
         this.actions.Walk.timeScale = WALK_ANIMATION_SPEED;
       }
+      // The on-back float cut out of SwimSurface, for when he's not moving.
+      // Ping-pong so it loops without snapping from the end pose to the start.
+      const swim = this.actions.SwimSurface?.getClip();
+      if (swim) {
+        const frames = swim.duration * CLIP_FPS;
+        const floatClip = THREE.AnimationUtils.subclip(
+          swim,
+          "SwimFloat",
+          Math.round(FLOAT_START * frames),
+          Math.round(FLOAT_END * frames),
+          CLIP_FPS,
+        );
+        this.actions.SwimFloat = this.mixer.clipAction(floatClip);
+        this.actions.SwimFloat.setLoop(THREE.LoopPingPong);
+      }
       if (this.actions.Surface) {
         this.actions.Surface.setLoop(THREE.LoopOnce);
         this.actions.Surface.clampWhenFinished = true;
@@ -136,6 +153,7 @@ export class Character {
 
   // True during the on-back float part of the surface swim (swim slower then).
   isFloating() {
+    if (this.current && this.current === this.actions.SwimFloat) return true;
     const swim = this.actions.SwimSurface;
     if (!swim || this.current !== swim) return false;
     const p = swim.time / swim.getClip().duration;
@@ -163,6 +181,10 @@ export class Character {
       CLIP_FOR_MODE[mode] ??
       (this.speed > WALK_SPEED_THRESHOLD ? "Walk" : "Idle");
 
+    if (mode === "surface" && this.speed < SURFACE_IDLE_SPEED && this.actions.SwimFloat) {
+      name = "SwimFloat";
+    }
+
     // Treading water keeps the pose of the last direction swum: climb after Shift, dive after Space.
     if (mode === "dive" || mode === "rise") this.lastSwimDirection = mode;
     const hoverClimb = mode === "hover" && this.lastSwimDirection === "rise";
@@ -178,7 +200,7 @@ export class Character {
       if (surfaceClip.isRunning()) name = "Surface";
     }
     // Slower crossfade whenever a swim clip is on either side of the switch.
-    const leavingSwim = Object.values(CLIP_FOR_MODE).some(
+    const leavingSwim = [...Object.values(CLIP_FOR_MODE), "SwimFloat"].some(
       (clip) => this.current === this.actions[clip],
     );
     this.play(name, mode !== "land" || leavingSwim ? SWIM_FADE : LAND_FADE);
