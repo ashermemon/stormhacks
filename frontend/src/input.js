@@ -5,7 +5,7 @@ const touch = {
   forward: 0,
   right: 0,
   jump: false,
-  rise: false,
+  sink: false,
 };
 
 window.addEventListener('keydown', (e) => {
@@ -25,7 +25,7 @@ export function setTouchAxes(forward, right) {
 
 export function setTouchButton(name, pressed) {
   if (name === 'jump') touch.jump = pressed;
-  else if (name === 'rise') touch.rise = pressed;
+  else if (name === 'sink') touch.sink = pressed;
 }
 
 function clampAxis(v) {
@@ -48,7 +48,7 @@ export const keys = {
   jump: () => down.has('Space') || touch.jump,
   /** Camera orbit axis: +1 = E, -1 = Q. */
   orbit: () => (down.has('KeyE') ? 1 : 0) - (down.has('KeyQ') ? 1 : 0),
-  /** In water: Space dives (hold to keep going down), Shift swims back up. */
-  dive: () => down.has('Space') || touch.jump,
-  rise: () => down.has('ShiftLeft') || down.has('ShiftRight') || touch.rise,
+  /** In water: Space swims up (hold to keep rising), Shift dives (hold to keep going down). */
+  rise: () => down.has('Space') || touch.jump,
+  dive: () => down.has('ShiftLeft') || down.has('ShiftRight') || touch.sink,
 };

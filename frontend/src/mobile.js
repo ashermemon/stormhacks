@@ -44,8 +44,8 @@ export function createMobileControls({ onLook, onAction, onJournal, onChat }) {
     <div class="mobile-actions">
       <button type="button" class="mobile-btn mobile-btn-sm" id="mobile-chat" aria-label="Chat">Chat</button>
       <button type="button" class="mobile-btn mobile-btn-sm" id="mobile-journal" aria-label="Journal">Book</button>
-      <button type="button" class="mobile-btn" id="mobile-rise" aria-label="Swim up">Rise</button>
-      <button type="button" class="mobile-btn mobile-btn-lg" id="mobile-jump" aria-label="Jump or dive">Jump / Sink</button>
+      <button type="button" class="mobile-btn" id="mobile-sink" aria-label="Swim down">Sink</button>
+      <button type="button" class="mobile-btn mobile-btn-lg" id="mobile-jump" aria-label="Jump or swim up">Jump / Rise</button>
       <button type="button" class="mobile-btn mobile-btn-lg mobile-btn-action" id="mobile-action" aria-label="Grab or crack">Act</button>
     </div>
   `;
@@ -126,7 +126,7 @@ export function createMobileControls({ onLook, onAction, onJournal, onChat }) {
   }
 
   bindHold(root.querySelector("#mobile-jump"), "jump");
-  bindHold(root.querySelector("#mobile-rise"), "rise");
+  bindHold(root.querySelector("#mobile-sink"), "sink");
 
   const actionBtn = root.querySelector("#mobile-action");
   actionBtn.addEventListener(
@@ -211,7 +211,7 @@ export function createMobileControls({ onLook, onAction, onJournal, onChat }) {
     dispose() {
       resetStick();
       setTouchButton("jump", false);
-      setTouchButton("rise", false);
+      setTouchButton("sink", false);
       root.remove();
       document.body.classList.remove("has-mobile-controls");
     },

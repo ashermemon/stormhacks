@@ -266,7 +266,7 @@ export class Character {
       name = "SwimFloat";
     }
 
-    // Treading water keeps the pose of the last direction swum: climb after Shift, dive after Space.
+    // Treading water keeps the pose of the last direction swum: climb after Space, dive after Shift.
     if (mode === "dive" || mode === "rise") this.lastSwimDirection = mode;
     const hoverClimb = mode === "hover" && this.lastSwimDirection === "rise";
     if (hoverClimb) name = "Surface";
