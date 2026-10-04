@@ -25,11 +25,14 @@ export const waterUniforms = {
   opacity: { value: 0.85 }, // < 1 so the otter is visible when diving; 1 = fully opaque like the reference
   deepShade: { value: new THREE.Color("#14559e") }, // colour the water darkens to over deep spots
   depthRange: { value: 20.0 }, // set automatically from the map's userData.depthRange
-  patternScale: { value: 0.22 }, // smaller = bigger patches and streaks
+  patternScale: { value: 0.12 }, // smaller = bigger patches and streaks
   flowSpeed: { value: 0.6 }, // how fast the pattern travels downstream
   foamWidth: { value: 0.22 }, // shoreline foam, in units of water depth
-  streakAmount: { value: 0.55 }, // higher = fewer white streaks (0..1)
-  patchAmount: { value: 0.05 }, // higher = fewer light-blue patches (-1..1)
+  streakAmount: { value: 0.68 }, // higher = fewer white streaks (0..1)
+  patchAmount: { value: 0.1 }, // higher = fewer light-blue patches (-1..1)
+  patchStrength: { value: 0.45 }, // how strongly light patches show (0..1)
+  streakStrength: { value: 0.55 }, // how strongly white streaks show (0..1)
+  detailFade: { value: 0.6 }, // pattern fades out once it's this small on screen; lower = fades sooner
 };
 
 export function updateWater(elapsedSeconds) {
@@ -66,6 +69,9 @@ const frag = /* glsl */ `
   uniform float foamWidth;
   uniform float streakAmount;
   uniform float patchAmount;
+  uniform float patchStrength;
+  uniform float streakStrength;
+  uniform float detailFade;
   varying vec2 vWorld;
   varying float vDepth;
   varying vec2 vFlow;
@@ -104,7 +110,7 @@ const frag = /* glsl */ `
   // noise stretched along the flow so it reads as streaks
   float streaks(vec2 p, vec2 dir) {
     vec2 perp = vec2(-dir.y, dir.x);
-    vec2 q = vec2(dot(p, dir) * 0.45, dot(p, perp) * 1.6);
+    vec2 q = vec2(dot(p, dir) * 0.5, dot(p, perp) * 1.0);
     return snoise(q) * 0.65 + snoise(q * 2.3 + 4.1) * 0.35;
   }
 
@@ -124,11 +130,16 @@ const frag = /* glsl */ `
     float n = streaks(uv - drift * p0, dir) * w0
             + streaks(uv - drift * p1 + 13.7, dir) * (1.0 - w0);
 
-    // base blue darkens in soft steps over deep water (pools, pond, channels)
+    // Where the pattern gets tiny on screen (far away, grazing angles) it turns into
+    // dense stripes, so fade it out there and let the base blue carry it.
+    float footprint = length(fwidth(uv));
+    float detail = 1.0 - smoothstep(detailFade * 0.4, detailFade, footprint);
+
+    // base blue darkens smoothly over deep water (pools, pond, channels)
     float deepness = smoothstep(2.0, 10.0, vDepth);
-    vec3 col = mix(deepColor, deepShade, floor(deepness * 3.0 + 0.5) / 3.0);
-    col = mix(col, lightColor, aastep(patchAmount + 0.25 * deepness, n));   // fewer light patches over deep water
-    col = mix(col, foamColor,  aastep(streakAmount, n));      // white streaks
+    vec3 col = mix(deepColor, deepShade, deepness * 0.85);
+    col = mix(col, lightColor, aastep(patchAmount + 0.25 * deepness, n) * patchStrength * detail);
+    col = mix(col, foamColor,  aastep(streakAmount, n) * streakStrength * detail);
 
     // shoreline: light band, then a wobbly white foam rim where the water gets shallow
     float wob = snoise(vWorld * 1.3 + time * 0.3) * 0.08;

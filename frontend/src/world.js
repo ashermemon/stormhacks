@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import worldUrl from "../assets/models/world/World.glb?url";
+import { softenTerrainTexture } from "./terrainTexture.js";
 
 // World.glb: Y-up, centred on the origin, water surface at y = 0. The terrain is a
 // regular square vertex grid; its size and extent are read from the mesh itself.
@@ -25,11 +26,17 @@ export async function loadWorld() {
   root.traverse((o) => {
     if (o.userData.spawnZone) o.visible = false;
     if (!o.isMesh) return;
-    if (o.userData.surface === "ground") terrain = o;
+    if (o.userData.surface === "ground") {
+      terrain = o;
+      // Ink the ridges and skyline so the ground matches the toon style.
+      o.userData.noOutline = false;
+      o.userData.outline = "contour";
+    }
     if (o.userData.cave) o.material = caveMaterial; // exported without a material
     if (o.userData.collider) colliders.push(o);
   });
   if (!terrain) throw new Error("World.glb has no Terrain mesh");
+  if (terrain.material.map) softenTerrainTexture(terrain.material.map);
 
   const { getGroundHeight, mapHalf } = buildHeightLookup(terrain);
   const resolveColliders = buildColliders(colliders);

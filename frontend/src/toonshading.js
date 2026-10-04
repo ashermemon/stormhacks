@@ -19,7 +19,10 @@
 //
 // Per-object opt-outs:
 //   mesh.userData.toon = false        -> skip this mesh entirely
-//   mesh.userData.noOutline = true    -> toon shading but no outline (good for big floors)
+//   mesh.userData.noOutline = true    -> toon shading but no outline
+//   mesh.userData.outline = "contour" -> outline without the silhouette stencil, so
+//                                        it also draws where the mesh overlaps itself
+//                                        (hill in front of hill); for terrain
 //
 // The shading uses its own light direction (setToonLight), so the scene looks the
 // same regardless of the lights you add. Lights don't need to be removed; they're ignored.
@@ -42,6 +45,14 @@ export const outlineUniforms = {
   depthPush: { value: 0.06 }, // world units the outline sits behind the surface;
   // raise if stray lines show in creases, lower if
   // outlines vanish where objects touch
+};
+
+// Terrain contour lines (meshes tagged userData.outline = "contour"): same ink colour,
+// but thinner and pushed further back so gentle ground bumps don't draw scribbles —
+// only ridges, hill crests and the skyline do.
+export const contourOutlineUniforms = {
+  thickness: { value: 2.0 },
+  depthPush: { value: 0.6 },
 };
 
 export function setToonLight(x, y, z) {
@@ -69,6 +80,9 @@ const toonVert = /* glsl */ `
     #include <begin_vertex>
     #include <skinning_vertex>
     #include <project_vertex>
+    #ifdef CLIP_BELOW_Y
+      vWorldY = (modelMatrix * vec4(transformed, 1.0)).y;
+    #endif
     vNormalW = normalize(mat3(modelMatrix) * objectNormal);
   }
 `;
@@ -141,6 +155,9 @@ const outlineVert = /* glsl */ `
   #include <skinning_pars_vertex>
   attribute vec3 outlineNormal;          // smoothed normals, so hard-edged props don't crack open
   uniform float thickness;
+  #ifdef CLIP_BELOW_Y
+    varying float vWorldY;
+  #endif
   uniform float depthPush;
   void main() {
     float w = 1.0;
@@ -179,11 +196,21 @@ const outlineVert = /* glsl */ `
 
 const outlineFrag = /* glsl */ `
   uniform vec3 color;
+  #ifdef CLIP_BELOW_Y
+    varying float vWorldY;
+  #endif
   void main() {
+    #ifdef CLIP_BELOW_Y
+      if (vWorldY < CLIP_BELOW_Y) discard; // no ink under the water surface
+    #endif
     gl_FragColor = vec4(color, 1.0);
     #include <colorspace_fragment>
   }
 `;
+
+// Scenery and terrain outlines stop at the water surface (y = 0): seen through the
+// water, the bed's and caves' ink lines just read as clutter. Otters keep theirs.
+const UNDERWATER_CLIP = { CLIP_BELOW_Y: "-0.02" };
 
 function makeOutlineMaterial(defines = {}) {
   return new THREE.ShaderMaterial({
@@ -329,6 +356,7 @@ export function toonifyScene(root) {
   // Pass 1: convert materials. Outlined meshes get their top-level object's stencil
   // value, so e.g. a tree's trunk and crown share one silhouette.
   const groups = new Map(); // top-level object -> { ref, meshes }
+  const contours = [];
   root.traverse((o) => {
     if (!o.isMesh || o.userData.toon === false || o.userData._toonified) return;
     const list = Array.isArray(o.material) ? o.material : [o.material];
@@ -337,7 +365,9 @@ export function toonifyScene(root) {
     const outlined = !o.userData.noOutline && !transparent;
 
     let group = null;
-    if (outlined) {
+    if (outlined && o.userData.outline === "contour") {
+      contours.push(o);
+    } else if (outlined) {
       const top = topLevelObject(root, o);
       group = groups.get(top);
       if (!group) {
@@ -354,8 +384,13 @@ export function toonifyScene(root) {
   // Pass 2: outlines. Created after every body material on purpose: three draws
   // opaque materials in id order, so bodies stamp the stencil before outlines test it.
   for (const { ref, meshes } of groups.values()) {
-    const outline = silhouetteOutline(makeOutlineMaterial(), ref);
+    const outline = silhouetteOutline(makeOutlineMaterial(UNDERWATER_CLIP), ref);
     for (const mesh of meshes) addOutlinePass(mesh, outline);
+  }
+  if (contours.length) {
+    const contour = makeOutlineMaterial(UNDERWATER_CLIP);
+    Object.assign(contour.uniforms, contourOutlineUniforms);
+    for (const mesh of contours) addOutlinePass(mesh, contour);
   }
   return root;
 }
