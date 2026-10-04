@@ -14,6 +14,7 @@ import { createSeating } from "./seating.js";
 import { createCampfire } from "./campfire.js";
 import { createWaterfall, WATERFALL } from "./waterfall.js";
 import { createFish } from "./fish.js";
+import { loadTrinketModels } from "./trinkets/models.js";
 import { createTrinkets } from "./trinkets/trinkets.js";
 import { collectSpawnZones } from "./trinkets/spawnZones.js";
 import { createMobileControls } from "./mobile.js";
@@ -106,6 +107,7 @@ export async function loadScene() {
   const aquatic = createAquaticArea(getGroundHeight);
   // Trinkets (and fish) use the World.glb spawn-zone meshes; collectSpawnZones hides them.
   const zones = collectSpawnZones(world.root);
+  await loadTrinketModels(); // Trinkets.glb, for the fish and the trinkets
   const fish = createFish(scene, 12, { getGroundHeight, zones });
 
   // Cel-shade everything built so far (the water keeps its own shader); otters are styled in Character.

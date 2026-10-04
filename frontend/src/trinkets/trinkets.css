@@ -88,6 +88,13 @@
   transition: opacity 0.2s;
 }
 #trinket-reveal.show { opacity: 1; visibility: visible; }
+/* On its way out (trinkets.js): fades, shrinks a little and drifts up. */
+#trinket-reveal.show.hiding {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-12px) scale(0.88);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  animation: none;
+}
 #trinket-reveal .tier { font-size: 30px; text-transform: uppercase; }
 #trinket-reveal.landed .tier { animation: trinket-land 0.4s ease-out; }
 #trinket-reveal .name { font-size: 36px; margin-top: 6px; }
@@ -145,6 +152,13 @@
 #journal th { text-align: left; text-transform: capitalize; }
 #journal td { width: 48px; height: 48px; text-align: center; border: 2px dashed #d8c39a; font-size: 22px; }
 #journal td small { display: block; font-size: 12px; }
+#journal .trinket-icon { display: block; width: 44px; height: 44px; margin: 0 auto; }
+#journal .shells { display: flex; align-items: center; justify-content: center; gap: 8px; }
+#journal .shells .pixel-shell, .hat-shell-icon .pixel-shell, .hat-price .pixel-shell {
+  width: 1.4em;
+  height: auto;
+  vertical-align: -0.25em;
+}
 #journal td.got { border: 3px solid var(--tier); background: #fffaf0; }
 #journal .empty { color: #c4ae84; }
 #journal .stamp { animation: trinket-stamp 0.5s ease-out; }

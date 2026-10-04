@@ -1,5 +1,8 @@
 import * as THREE from "three";
 import { WATER_SURFACE_Y } from "./world.js";
+import { FISH_MODELS, trinketModel } from "./trinkets/models.js";
+
+const FISH_SCALE = 5; // the Trinkets.glb fish are real-world sized
 
 const COLORS = [0xf2b84b, 0xf08a6b, 0x8cc9d8, 0xd98fca];
 const MIN_DEPTH = 0.7; // fish turn back before water gets shallower than this
@@ -27,16 +30,26 @@ export function createFish(scene, count, { getGroundHeight, zones }) {
       color: COLORS[index % COLORS.length],
       roughness: 0.7,
     });
-    // Built facing +x.
-    const body = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 5), material);
-    body.scale.set(1.5 * scale, 0.65 * scale, 0.65 * scale);
-    const tail = new THREE.Mesh(
-      new THREE.ConeGeometry(0.65 * scale, 0.9 * scale, 4),
-      material,
+    // Built facing +x. The Trinkets.glb fish face +z, so turn them a quarter.
+    const model = trinketModel(
+      FISH_MODELS[index % FISH_MODELS.length],
+      COLORS[index % COLORS.length],
+      FISH_SCALE * (scale / 0.28),
     );
-    tail.rotation.z = -Math.PI / 2;
-    tail.position.x = -1.1 * scale;
-    root.add(body, tail);
+    if (model) {
+      model.rotation.y = Math.PI / 2;
+      root.add(model);
+    } else {
+      const body = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 5), material);
+      body.scale.set(1.5 * scale, 0.65 * scale, 0.65 * scale);
+      const tail = new THREE.Mesh(
+        new THREE.ConeGeometry(0.65 * scale, 0.9 * scale, 4),
+        material,
+      );
+      tail.rotation.z = -Math.PI / 2;
+      tail.position.x = -1.1 * scale;
+      root.add(body, tail);
+    }
     root.position.set(spot.x, 0, spot.z);
     group.add(root);
     fish.push({

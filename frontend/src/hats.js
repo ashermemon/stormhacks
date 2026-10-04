@@ -1,4 +1,5 @@
 import hatUrl from "../assets/models/character/Hat.glb?url";
+import { PIXEL_SHELL_SVG } from "./trinkets/pixelShell.js";
 import wizardHatUrl from "../assets/models/character/WizardHat.glb?url";
 const HATS = [
   {
@@ -98,7 +99,7 @@ export function createWardrobe(
 
           <div class="hat-shells">
             <span class="hat-shell-icon">
-              🐚
+              ${PIXEL_SHELL_SVG}
             </span>
 
             <span>
@@ -137,7 +138,7 @@ export function createWardrobe(
                 <div class="hat-name">
                   ${hat.name}
                 </div>
-                <div class="hat-price"> ${ !owned ? ( hat.price === 0 ? "Free" : `🐚 ${hat.price}` ) : "" } </div>
+                <div class="hat-price"> ${ !owned ? ( hat.price === 0 ? "Free" : `${PIXEL_SHELL_SVG} ${hat.price}` ) : "" } </div>
                                 ${
                                   !owned
                                     ? `
