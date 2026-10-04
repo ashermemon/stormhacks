@@ -2,6 +2,7 @@ import { loadScene, startGame } from "./game.js";
 import { startMenuTour } from "./menuTour.js";
 import { identity } from "./identity.js";
 import { enterFullscreen, keepFullscreen } from "./fullscreen.js";
+import { playMusic } from "./music.js";
 
 const menu = document.getElementById("menu");
 const playBtn = document.getElementById("play-btn");
@@ -9,6 +10,8 @@ const usernameInput = document.getElementById("username");
 const status = document.getElementById("status");
 
 usernameInput.value = identity.getName();
+
+playMusic("menu");
 
 // Load the world straight away and film it behind the menu until Play.
 status.textContent = "Loading the river, this may take a while...";
@@ -47,6 +50,7 @@ playBtn.addEventListener("click", async () => {
   }
   identity.setName(name);
   enterFullscreen(); // needs this click, so before anything async
+  playMusic("game"); // also a click-only thing, for browsers that block autoplay
   keepFullscreen();
 
   playBtn.disabled = true;
@@ -61,6 +65,7 @@ playBtn.addEventListener("click", async () => {
   } catch (error) {
     console.error(error);
     menu.classList.remove("covering");
+    playMusic("menu");
     status.textContent = error.message;
     playBtn.disabled = false;
   }
