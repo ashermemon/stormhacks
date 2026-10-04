@@ -22,7 +22,6 @@ const SURFACE_IDLE_SPEED = 0.3; // below this at the surface he just floats on h
 // the level-out, head pop and shake, played once on reaching the top.
 const SURFACE_CLIMB_END = 1.4;
 // Jump: JumpStart on leaving the ground, JumpAir until touchdown, JumpLand on impact.
-const AIRBORNE_HEIGHT = 0.05; // above the ground by more than this = in the air
 const JUMP_CLIPS = { start: "JumpStart", air: "JumpAir", land: "JumpLand" };
 const JUMP_FADES = { start: 0.1, air: 0.05, land: 0.08 };
 // JumpStart ends on JumpAir's first frame and JumpLand on Idle's, so barely blend.
@@ -169,7 +168,7 @@ export class Character {
 
   // Picks the clip from how the root moved since last frame, so it works the
   // same for the local player and network-smoothed remotes. getSwimMode(position, vy)
-  // returns "land", "surface", "dive", "hover" or "rise".
+  // returns "land", "air", "surface", "dive", "hover" or "rise".
   update(delta, getSwimMode = null) {
     const { x, y, z } = this.root.position;
     if (this.lastX !== undefined && delta > 0) {
@@ -183,6 +182,7 @@ export class Character {
     this.lastZ = z;
 
     const mode = getSwimMode?.(this.root.position, this.vy) ?? "land";
+    const onLand = mode === "land" || mode === "air";
     const surfaceClip = this.actions.Surface;
     let name =
       CLIP_FOR_MODE[mode] ??
@@ -212,7 +212,7 @@ export class Character {
       if (surfaceClip.isRunning()) name = "Surface";
     }
     let fade = null;
-    this.updateJumpPhase(mode, y);
+    this.updateJumpPhase(mode);
     if (this.jumpPhase) {
       name = JUMP_CLIPS[this.jumpPhase];
       fade = JUMP_FADES[this.jumpPhase];
@@ -224,7 +224,7 @@ export class Character {
     const leavingSwim = [...Object.values(CLIP_FOR_MODE), "SwimFloat"].some(
       (clip) => this.current === this.actions[clip],
     );
-    fade ??= mode !== "land" || leavingSwim ? SWIM_FADE : LAND_FADE;
+    fade ??= !onLand || leavingSwim ? SWIM_FADE : LAND_FADE;
     this.play(name, fade);
     if (this.actions.Dive) {
       this.actions.Dive.timeScale =
@@ -241,14 +241,14 @@ export class Character {
     }
   }
 
-  // Works from height alone so remote players' jumps animate too.
-  updateJumpPhase(mode, y) {
+  // Works from height above the ground alone, so remote players' jumps animate too.
+  updateJumpPhase(mode) {
     const { JumpStart: start, JumpAir: air, JumpLand: land } = this.actions;
-    if (mode !== "land" || !start || !air || !land) {
+    if ((mode !== "land" && mode !== "air") || !start || !air || !land) {
       this.jumpPhase = null;
       return;
     }
-    const airborne = y > AIRBORNE_HEIGHT;
+    const airborne = mode === "air";
     const inAir = this.jumpPhase === "start" || this.jumpPhase === "air";
     if (airborne) {
       if (!inAir) this.jumpPhase = "start";
