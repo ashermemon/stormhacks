@@ -1,6 +1,5 @@
 import hatUrl from "../assets/models/character/Hat.glb?url";
 import wizardHatUrl from "../assets/models/character/WizardHat.glb?url";
-
 const HATS = [
   {
     id: "none",
@@ -56,6 +55,12 @@ export function createWardrobe(
     "click",
     () => toggle(false),
   );
+
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "Escape" && !wardrobe.hidden) {
+      toggle(false);
+    }
+  });
 
   function getShells() {
     return journal?.getShells?.() ?? 0;
@@ -277,6 +282,15 @@ export function createWardrobe(
         character.getHatId();
 
       render();
+
+      if (document.pointerLockElement) {
+        document.exitPointerLock();
+      }
+    } else {
+      if (!document.body.classList.contains("has-mobile-controls")) {
+        const canvas = document.querySelector("canvas");
+        canvas?.requestPointerLock()?.catch?.(() => {});
+      }
     }
 
     onToggle?.(open);
