@@ -4,7 +4,8 @@ import { keys } from "./input.js";
 import { createAquaticArea } from "./water.js";
 import { createEnvironment } from "./environment.js";
 import { Character, OTTER_COLORS } from "./character.js";
-import { getUsername } from "./nametags.js";
+import { createChat } from "./chat.js";
+import { trackNames } from "./names.js";
 
 const ARENA_HALF = 20;
 const AVATAR = { w: 1, h: 2, d: 0.6 };
@@ -57,7 +58,7 @@ export async function startGame() {
   function setRemote(id, state) {
     let remote = remotes.get(id);
     if (!remote) {
-      const character = new Character(scene, colorFor(id));
+      const character = new Character(scene, colorFor(id), names.get(id));
       character.root.position.set(state.x, state.y, state.z);
       character.root.rotation.y = state.ry;
       remote = { character, target: state };
@@ -80,12 +81,18 @@ export async function startGame() {
     },
   });
 
+  // Player id -> Character (local player or remote), and the names that go on their tags.
+  const characterOf = (id) => (id === net.id ? me : remotes.get(id)?.character);
+  const names = trackNames(net, (id, name) => characterOf(id)?.setName(name));
+
   for (const [id, state] of Object.entries(net.players)) setRemote(id, state);
 
   // Local player.
-  const me = new Character(scene, colorFor(net.id), getUsername());
+  const me = new Character(scene, colorFor(net.id), net.name);
   const spawn = () => (Math.random() * 2 - 1) * (ARENA_HALF - 2);
   const player = { x: spawn(), y: 0, z: spawn(), vy: 0, ry: 0 };
+
+  const chat = createChat({ net, camera, getCharacter: characterOf });
 
   let cameraYaw = 0;
   let dragging = false;
@@ -191,5 +198,6 @@ export async function startGame() {
     }
 
     renderer.render(scene, camera);
+    chat.update();
   });
 }

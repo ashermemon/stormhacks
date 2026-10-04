@@ -1,6 +1,9 @@
 const down = new Set();
 
 window.addEventListener('keydown', (e) => {
+  // Typing in a text box (chat, name) must not move the avatar. keyup is not
+  // filtered, so keys held when the box opened still get released.
+  if (e.target instanceof HTMLInputElement) return;
   down.add(e.code);
   if (e.code === 'Space') e.preventDefault();
 });

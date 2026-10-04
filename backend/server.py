@@ -6,15 +6,14 @@ One port serves both:
 
 So a single `tailscale funnel 8765` exposes everything under one URL.
 
-The WebSocket side is a relay: it assigns ids, remembers each player's last state,
-and forwards updates. It never interprets `state`; it only checks that it is a
-small JSON object.
+The WebSocket side is a relay. Players identify with a `hello` message (token + name,
+see identity.py), then the server relays their `state`, `chat` and `rename` messages
+to everyone. It never interprets `state`; it only checks that it is a small JSON object.
 """
 import asyncio
 import json
 import mimetypes
 import os
-import uuid
 from http import HTTPStatus
 from pathlib import Path
 
@@ -22,15 +21,23 @@ import websockets
 from websockets.datastructures import Headers
 from websockets.http11 import Response
 
+from chat import RateLimiter, clean_message
+from identity import IdentityError, IdentityStore
+
 PORT = int(os.environ.get("PORT", "8765"))
 STATIC_DIR = Path(
     os.environ.get("FRONTEND_DIR", Path(__file__).resolve().parent.parent / "frontend" / "dist")
 ).resolve()
 WS_PATH = "/ws"
 MAX_MESSAGE_BYTES = 1024
+HELLO_TIMEOUT = 10  # seconds to send the hello message after connecting
+CHAT_INTERVAL = 0.5  # minimum seconds between chat messages per player
+RENAME_INTERVAL = 2
 
 players = {}  # id -> websocket
 states = {}  # id -> last state
+names = {}  # id -> display name
+store = IdentityStore()
 
 
 def http_response(status, body, content_type="text/plain; charset=utf-8", extra=None):
@@ -76,13 +83,62 @@ async def broadcast(message, exclude=None):
     await asyncio.gather(*(ws.send(data) for ws in targets), return_exceptions=True)
 
 
+async def send(ws, message):
+    await ws.send(json.dumps(message))
+
+
+async def authenticate(ws):
+    """Wait for the hello message. Returns (token, Identity), or None if rejected."""
+    try:
+        raw = await asyncio.wait_for(ws.recv(), HELLO_TIMEOUT)
+        msg = json.loads(raw)
+    except (asyncio.TimeoutError, ValueError, websockets.ConnectionClosed):
+        return None
+    if not isinstance(msg, dict) or msg.get("type") != "hello":
+        return None
+    try:
+        return store.login(msg.get("token"), msg.get("name"))
+    except IdentityError as error:
+        await send(ws, {"type": "error", "message": str(error)})
+        return None
+
+
 async def handler(ws):
-    pid = uuid.uuid4().hex[:8]
+    auth = await authenticate(ws)
+    if auth is None:
+        return
+    token, identity = auth
+    pid, name = identity.id, identity.name
+
+    # One live session per identity: a newer connection replaces the older one.
+    old = players.get(pid)
+    old_name = names.get(pid)
     players[pid] = ws
-    print(f"+ {pid} ({len(players)} online)")
+    names[pid] = name
+    print(f"+ {name} [{pid}] ({len(players)} online)")
+
+    chat_limit = RateLimiter(CHAT_INTERVAL)
+    rename_limit = RateLimiter(RENAME_INTERVAL)
 
     try:
-        await ws.send(json.dumps({"type": "welcome", "id": pid, "players": states}))
+        if old is not None:
+            await old.close(4000, "Signed in from another tab")
+
+        await send(
+            ws,
+            {
+                "type": "welcome",
+                "id": pid,
+                "name": name,
+                "token": token,
+                "players": {i: s for i, s in states.items() if i != pid},
+                "names": {i: n for i, n in names.items() if i != pid},
+            },
+        )
+        if old is None:
+            await broadcast({"type": "join", "id": pid, "name": name}, exclude=pid)
+        elif old_name != name:
+            await broadcast({"type": "renamed", "id": pid, "name": name}, exclude=pid)
 
         async for raw in ws:
             if len(raw) > MAX_MESSAGE_BYTES:
@@ -91,19 +147,45 @@ async def handler(ws):
                 msg = json.loads(raw)
             except ValueError:
                 continue
-            if not isinstance(msg, dict) or msg.get("type") != "state":
-                continue
-            state = msg.get("state")
-            if not isinstance(state, dict):
+            if not isinstance(msg, dict):
                 continue
 
-            states[pid] = state
-            await broadcast({"type": "state", "id": pid, "state": state}, exclude=pid)
+            kind = msg.get("type")
+            if kind == "state":
+                state = msg.get("state")
+                if not isinstance(state, dict):
+                    continue
+                states[pid] = state
+                await broadcast({"type": "state", "id": pid, "state": state}, exclude=pid)
+
+            elif kind == "chat":
+                text = clean_message(msg.get("text"))
+                if text is None:
+                    continue
+                if not chat_limit.allow():
+                    await send(ws, {"type": "error", "message": "You are sending messages too fast."})
+                    continue
+                await broadcast({"type": "chat", "id": pid, "name": names[pid], "text": text})
+
+            elif kind == "rename":
+                if not rename_limit.allow():
+                    await send(ws, {"type": "error", "message": "You are renaming too fast."})
+                    continue
+                try:
+                    new_name = store.rename(pid, msg.get("name"))
+                except IdentityError as error:
+                    await send(ws, {"type": "error", "message": str(error)})
+                    continue
+                names[pid] = new_name
+                await broadcast({"type": "renamed", "id": pid, "name": new_name})
     finally:
-        players.pop(pid, None)
-        states.pop(pid, None)
-        await broadcast({"type": "leave", "id": pid})
-        print(f"- {pid} ({len(players)} online)")
+        # A replaced session must not clean up the identity's newer session.
+        if players.get(pid) is ws:
+            del players[pid]
+            states.pop(pid, None)
+            names.pop(pid, None)
+            await broadcast({"type": "leave", "id": pid})
+        print(f"- {name} [{pid}] ({len(players)} online)")
 
 
 async def main():

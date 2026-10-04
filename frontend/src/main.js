@@ -1,11 +1,26 @@
 import { startGame } from "./game.js";
+import { identity } from "./identity.js";
 
 const menu = document.getElementById("menu");
 const playBtn = document.getElementById("play-btn");
-const status = document.getElementById("status");
 const usernameInput = document.getElementById("username");
+const status = document.getElementById("status");
+
+usernameInput.value = identity.getName();
+
+usernameInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") playBtn.click();
+});
 
 playBtn.addEventListener("click", async () => {
+  const name = usernameInput.value.trim();
+  if (!name) {
+    status.textContent = "Enter a name first.";
+    usernameInput.focus();
+    return;
+  }
+  identity.setName(name);
+
   playBtn.disabled = true;
   status.textContent = "Connecting...";
   try {
