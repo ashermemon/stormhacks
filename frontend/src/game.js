@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { connect } from "./net.js";
 import { keys } from "./input.js";
 import { createAquaticArea } from "./water.js";
-import { createEnvironment } from "./environment.js";
+import { createEnvironment, collideWithGround } from "./environment.js";
 import { Character, OTTER_COLORS } from "./character.js";
 import { createChat } from "./chat.js";
 import { trackNames } from "./names.js";
@@ -155,6 +155,7 @@ export async function startGame() {
       dt,
       isOverArenaFloor(),
     );
+    collideWithGround(player, ARENA_HALF);
 
     me.root.position.set(player.x, player.y, player.z);
     me.root.rotation.y = player.ry;
