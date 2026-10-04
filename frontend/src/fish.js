@@ -10,7 +10,19 @@ const FLEE_DISTANCE = 4;
 
 // Fish start at random points on the underwater spawn zones and wander wherever the
 // water is deep enough, bobbing between the bed and the surface.
-export function createFish(scene, count, { getGroundHeight, zones }) {
+// Where a fish's mouth is: the front tip of its model (it swims along +x), a little
+// below the middle.
+function mouthOf(root, scale) {
+  const at = root.position.clone();
+  root.position.set(0, 0, 0); // measure in the fish's own space
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(root);
+  root.position.copy(at);
+  if (box.isEmpty()) return { mouth: 1.6 * scale, mouthY: 0 };
+  return { mouth: box.max.x * 0.95, mouthY: (box.min.y + box.max.y) / 2 - (box.max.y - box.min.y) * 0.1 };
+}
+
+export function createFish(scene, count, { getGroundHeight, zones, bubbles = null }) {
   const group = new THREE.Group();
   group.name = "fish";
   scene.add(group);
@@ -58,10 +70,13 @@ export function createFish(scene, count, { getGroundHeight, zones }) {
       depthMix: 0.3 + Math.random() * 0.4, // 0 = bed, 1 = surface
       phase: Math.random() * Math.PI * 2,
       speed: 0.25 + Math.random() * 0.5,
+      ...mouthOf(root, scale),
+      breath: Math.random() * 3, // seconds until it next breathes out bubbles
     });
   }
 
   let elapsed = 0;
+  const mouth = new THREE.Vector3();
   return {
     update(dt, player) {
       elapsed += dt;
@@ -88,6 +103,18 @@ export function createFish(scene, count, { getGroundHeight, zones }) {
         const bob = Math.sin(elapsed * 1.8 + swimmer.phase) * 0.1;
         position.y = THREE.MathUtils.lerp(bed, top, swimmer.depthMix) + bob;
         swimmer.root.rotation.y = swimmer.heading;
+
+        // Every couple of seconds, a few little bubbles from its mouth.
+        swimmer.breath -= dt;
+        if (bubbles && swimmer.breath <= 0) {
+          swimmer.breath = 1.5 + Math.random() * 2.5;
+          mouth.set(
+            position.x + Math.cos(swimmer.heading) * swimmer.mouth,
+            position.y + swimmer.mouthY,
+            position.z - Math.sin(swimmer.heading) * swimmer.mouth,
+          );
+          bubbles.emit(mouth, 1 + Math.floor(Math.random() * 3));
+        }
       }
     },
   };
