@@ -107,7 +107,7 @@ export function createChat({ net, camera, getCharacter }) {
     root.classList.remove('open');
     input.blur();
   }
-
+const noNoWords = ["fuck", "shit", "bitch", "cunt", "nigger", "faggot", "asshole", "dick", "pussy", "cock", "slut", "whore", "nigga", "fag", "bastard", "douchebag", "motherfucker", "twat", "retard", "idiot"];
   function submit() {
     const text = input.value.trim();
     if (!text) return;
@@ -116,7 +116,12 @@ export function createChat({ net, camera, getCharacter }) {
     } else if (text.startsWith('/')) {
       addLine('Unknown command. Try: /name <new name>', { kind: 'system' });
     } else {
-      net.sendChat(text);
+      console.log(text)
+      if(noNoWords.some(word => text.toLowerCase().includes(word))){
+        addLine('Please use appropriate language.', { kind: 'system' });
+      } else {
+        net.sendChat(text);
+      }
     }
   }
 

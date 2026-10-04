@@ -21,6 +21,8 @@ const FLOAT_SWIM_SPEED = 0.8; // drifting on his back during the SwimSurface flo
 const UNDERWATER_SWIM_SPEED = 3;
 const SEND_INTERVAL = 1 / 30;
 const CAMERA_DISTANCE = 8;
+const CAMERA_DISTANCE_MIN = 3;
+const CAMERA_DISTANCE_MAX = 15;
 const CAMERA_HEIGHT = 4;
 const ORBIT_SPEED = 2;
 const REMOTE_SMOOTHING = 15;
@@ -144,6 +146,7 @@ export async function startGame() {
 
   let cameraYaw = 0;
   let cameraPitch = 0.25;
+  let cameraDistance = CAMERA_DISTANCE;
   // Mouse look: click the game to lock the cursor, then just move the mouse. Esc releases it.
   canvas.addEventListener("click", lockPointer);
   lockPointer(); // may work straight away thanks to the Play button click
@@ -152,10 +155,17 @@ export async function startGame() {
       cameraYaw -= e.movementX * MOUSE_SENSITIVITY;
       cameraPitch = Math.max(
         CAMERA_PITCH_MIN,
-        Math.min(CAMERA_PITCH_MAX, cameraPitch - e.movementY * MOUSE_SENSITIVITY),
+        Math.min(CAMERA_PITCH_MAX, cameraPitch + e.movementY * MOUSE_SENSITIVITY),
       );
     }
   });
+  canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    cameraDistance = Math.max(
+      CAMERA_DISTANCE_MIN,
+      Math.min(CAMERA_DISTANCE_MAX, cameraDistance + e.deltaY * 0.01),
+    );
+  }, { passive: false });
 
   let sendTimer = 0;
   const clock = new THREE.Clock();
@@ -220,13 +230,13 @@ export async function startGame() {
     me.update(dt, aquatic.swimModeAt);
 
     // Third-person camera behind the player, looking at their head.
-    const horizontalDistance = CAMERA_DISTANCE * Math.cos(cameraPitch);
+    const horizontalDistance = cameraDistance * Math.cos(cameraPitch);
     const camX = player.x + Math.sin(cameraYaw) * horizontalDistance;
     const camZ = player.z + Math.cos(cameraYaw) * horizontalDistance;
     camera.position.set(
       camX,
       Math.max(
-        player.y + CAMERA_HEIGHT + Math.sin(cameraPitch) * CAMERA_DISTANCE,
+        player.y + CAMERA_HEIGHT + Math.sin(cameraPitch) * cameraDistance,
         getGroundHeight(camX, camZ) + CAMERA_GROUND_CLEARANCE,
       ),
       camZ,
