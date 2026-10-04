@@ -12,17 +12,17 @@ const GRASS_MOUNTAIN_RADIUS = 7;
 // small snow patches keep their colour).
 const ROCK_SNOW_RADIUS = 4;
 
-const SHORE = 0;
-const GRASS = 1;
-const ROCK = 2;
-const SNOW = 3;
+export const SHORE = 0;
+export const GRASS = 1;
+export const ROCK = 2;
+export const SNOW = 3;
 
 const isSnow = (r, g, b) => Math.min(r, g, b) > 190;
 // Stricter test for "leave this pixel alone": the texture's anti-aliased snow edge
 // pixels are greyish and should be faded too, or they'd leave a faint grey rim.
 const isPureSnow = (r, g, b) => Math.min(r, g, b) > 228;
 
-function zoneOf(r, g, b) {
+export function zoneOf(r, g, b) {
   if (g - Math.max(r, b) > 30) return GRASS; // the two greens
   if (isSnow(r, g, b)) return SNOW; // near-white
   if (r - b > 30) return SHORE; // sand rim and stream/pond bed

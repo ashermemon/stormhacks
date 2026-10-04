@@ -15,6 +15,8 @@ import "./trinkets.css";
 const GRAB_RANGE = 1.8; // from the otter's middle to the trinket
 const GRAB_FLY_TIME = 0.3; // seabed -> paws
 const CRACK_LIFT = 1.4; // how far above the paws a trinket is held while cracking
+const HUG_SIZE = 0.32; // widest a trinket can be to fit the paws in the swim hold pose
+const HUG_FIT_SPEED = 8; // how fast it shrinks/grows into and out of the hug
 const CRACK_TURN_SPEED = 10; // how fast the otter spins to face the camera before the rhythm
 const CRACK_TURN_DONE = 0.06; // radians — close enough to start the minigame
 const BEAT_LEAD = 1.0; // seconds before the first beat
@@ -137,6 +139,10 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   function addTrinket(data, popIn = false) {
     const { group, colors } = buildTrinket(data.species, data.seed);
     toonifyScene(group);
+    // Measured before placing: the model's origin is its base, the hug socket wants its middle.
+    const bounds = new THREE.Box3().setFromObject(group);
+    const center = bounds.getCenter(new THREE.Vector3());
+    const size = bounds.getSize(new THREE.Vector3());
     const spot = spawnPointFromSeed(zones, data.seed);
     group.position.copy(spot.position);
     group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), spot.normal);
@@ -160,6 +166,9 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
       popT: popIn ? 0 : 1, // 0..1 while appearing
       wobble: 0, // squash after a tap / denied grab
       lift: 0, // 0..1, raised over the head while cracking
+      center, // middle of the model, in its own space
+      hugScale: Math.min(1, HUG_SIZE / Math.max(size.x, size.y, size.z)),
+      fit: 1, // eases toward hugScale while hugged to the chest
     });
   }
 
@@ -249,6 +258,7 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
     if (!t) return;
     if (t.holder === net.id) endCrack();
     t.holder = null;
+    t.fit = 1;
     t.group.position.copy(t.home);
     t.group.quaternion.copy(t.homeQuaternion);
     t.group.scale.setScalar(1);
@@ -463,6 +473,8 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
 
   const paw = new THREE.Vector3();
   const holdQuat = new THREE.Quaternion();
+  const offset = new THREE.Vector3();
+  let holders = new Set(); // player ids whose otter is told it's holding something
   return {
     /** Movement and diving are frozen while cracking. */
     busy: () => crack !== null,
@@ -512,6 +524,7 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
         fishGrabTime = 0;
       }
 
+      const nowHolding = new Set();
       for (const t of trinkets.values()) {
         t.wobble = Math.max(0, t.wobble - dt * 4);
         t.popT = Math.min(1, t.popT + dt * 2);
@@ -520,11 +533,18 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
         if (t.holder) {
           t.glint.visible = false;
           const character = getCharacter(t.holder);
-          if (!pawTransform(character, paw, holdQuat)) {
+          // In the water he hugs it to his chest (the _Hold clips), centred on the
+          // skeleton's trinket socket; on land it sits at his paws as before.
+          character?.setHolding(true);
+          nowHolding.add(t.holder);
+          const hugged = character?.inHoldPose() && character.holdSocket(paw, holdQuat);
+          if (!hugged && !pawTransform(character, paw, holdQuat)) {
             t.group.visible = false;
             continue;
           }
           t.group.visible = true;
+          t.fit += ((hugged ? t.hugScale : 1) - t.fit) * Math.min(1, dt * HUG_FIT_SPEED);
+          if (hugged) paw.sub(offset.copy(t.center).multiplyScalar(t.fit).applyQuaternion(holdQuat));
           t.grabT = Math.min(1, t.grabT + dt / GRAB_FLY_TIME);
           const k = 1 - (1 - t.grabT) ** 3; // ease out
           t.group.position.lerpVectors(t.home, paw, k);
@@ -535,7 +555,7 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
           t.lift += ((t.holder === net.id && crack ? 1 : 0) - t.lift) * Math.min(1, dt * 10);
           t.group.position.y += t.lift * (CRACK_LIFT - t.wobble * 0.4);
           t.group.quaternion.slerpQuaternions(t.homeQuaternion, holdQuat, k);
-          const grow = 1 + Math.sin(k * Math.PI) * 0.4 + t.lift * 0.6;
+          const grow = (1 + Math.sin(k * Math.PI) * 0.4 + t.lift * 0.6) * t.fit;
           t.group.scale.set(squash, 1 / squash, squash).multiplyScalar(grow);
         } else {
           // On the seabed: twinkle now and then; the one you can grab pulses.
@@ -549,6 +569,10 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
           t.group.scale.set(squash, 1 / squash, squash).multiplyScalar(pulse * pop);
         }
       }
+
+      // Let go (cracked, dropped, or someone else took it): back to the normal clips.
+      for (const id of holders) if (!nowHolding.has(id)) getCharacter(id)?.setHolding(false);
+      holders = nowHolding;
 
       updateCrack(dt);
       updateReveal(dt);

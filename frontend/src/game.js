@@ -3,12 +3,14 @@ import { connect } from "./net.js";
 import { keys } from "./input.js";
 import { createAquaticArea } from "./water.js";
 import { createEnvironment } from "./environment.js";
+import { LIGHT_DIRECTION } from "./atmosphere.js";
 import { loadWorld } from "./world.js";
 import { applyToonWater, updateWater } from "./watershader.js";
 import { Character, OTTER_COLORS } from "./character.js";
 import { createChat } from "./chat.js";
 import { trackNames } from "./names.js";
-import { setToonLight, toonifyScene } from "./toonshading.js";
+import { setToonLight, toonifyScene, updateWind } from "./toonshading.js";
+import { createScenery } from "./scenery.js";
 import { createFish } from "./fish.js";
 import { createTrinkets } from "./trinkets/trinkets.js";
 import { collectSpawnZones } from "./trinkets/spawnZones.js";
@@ -46,17 +48,21 @@ function lerpAngle(a, b, t) {
 
 export async function startGame() {
   const scene = new THREE.Scene();
-  createEnvironment(scene);
+  const environment = createEnvironment(scene);
   const world = await loadWorld();
   const { getGroundHeight } = world;
   applyToonWater(world.root);
   scene.add(world.root);
+  // Grass, flowers, trees, rocks and seaweed; keeps the spawn meadow open.
+  const scenery = await createScenery(scene, world, {
+    clearings: [{ x: SPAWN.x, z: SPAWN.z, r: 5 }],
+  });
 
   const camera = new THREE.PerspectiveCamera(
     70,
     window.innerWidth / window.innerHeight,
     0.1,
-    500, // well past the 250 the mountain ring needs
+    600, // past the mountain ring and the farthest clouds
   );
 
   const renderer = new THREE.WebGLRenderer({
@@ -86,7 +92,7 @@ export async function startGame() {
   };
 
   // Cel-shade everything built so far (the water keeps its own shader); otters are styled in Character.
-  setToonLight(-25, 35, 12); // match the sun in environment.js
+  setToonLight(LIGHT_DIRECTION.x, LIGHT_DIRECTION.y, LIGHT_DIRECTION.z);
   toonifyScene(scene);
 
   // Remote players.
@@ -199,6 +205,7 @@ export async function startGame() {
   renderer.setAnimationLoop(() => {
     const dt = Math.min(clock.getDelta(), 0.1);
     updateWater(clock.elapsedTime);
+    updateWind(clock.elapsedTime);
     fish.update(dt, player);
 
     cameraYaw += keys.orbit() * ORBIT_SPEED * dt;
@@ -274,6 +281,8 @@ export async function startGame() {
       camZ,
     );
     camera.lookAt(player.x, player.y + AVATAR_HEIGHT, player.z);
+    scenery.update(camera);
+    environment.update(camera, clock.elapsedTime);
     trinkets.update(dt, player, camera);
 
     // Network.
