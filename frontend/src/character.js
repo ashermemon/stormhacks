@@ -109,6 +109,10 @@ export class Character {
     this.nametagHeight = 2;
     this.hat = null;
     this.hatId = "none";
+    this.ownedHats = {
+      hat: false,
+      wizardHat: true,
+    };
 
     if (name) this.setName(name);
     this.ready = this.load();
@@ -415,6 +419,39 @@ getHatId() {
 
 getHat() {
   return this.hat;
+}
+ownsHat(hatId) {
+  if (hatId === "none") return true;
+  return this.ownedHats[hatId] === true;
+}
+
+addHat(hatId) {
+  if (!HAT_FILES[hatId]) {
+    console.warn(`Unknown hat: ${hatId}`);
+    return false;
+  }
+
+  this.ownedHats[hatId] = true;
+  return true;
+}
+
+removeOwnedHat(hatId) {
+  if (hatId === "wizardHat") {
+    console.warn("Cannot remove the default wizard hat ownership.");
+    return false;
+  }
+
+  delete this.ownedHats[hatId];
+
+  if (this.hatId === hatId) {
+    this.removeHat();
+  }
+
+  return true;
+}
+
+getOwnedHats() {
+  return { ...this.ownedHats };
 }
   dispose() {
     this.setName(null);

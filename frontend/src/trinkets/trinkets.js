@@ -136,19 +136,25 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   const ring = rhythm.querySelector(".ring");
   const pips = rhythm.querySelector(".pips");
   const gradeText = rhythm.querySelector(".grade");
+  
   function toggleWardrobe() {
-    const character = getCharacter(net.id);
+  const character = getCharacter(net.id);
 
-    if (!character) {
-      console.warn("Cannot open wardrobe: character is not loaded.");
-      return;
-    }
+  if (!character) {
+    console.warn("Cannot open wardrobe: character is not loaded.");
+    return;
+  }
 
-    if (!wardrobe) {
-      wardrobe = createWardrobe(character);
-    }
+  if (!wardrobe) {
+    wardrobe = createWardrobe(
+      character,
+      () => {
+        // Existing toggle handling, if needed.
+      },
+    );
+  }
 
-    wardrobe.toggle();
+  wardrobe.toggle();
   }
 
   let currentShells = net.journal?.shells ?? 0;

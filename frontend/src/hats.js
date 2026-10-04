@@ -18,7 +18,7 @@ const HATS = [
     id: "wizardHat",
     name: "Wizard Hat",
     file: wizardHatUrl,
-    preview: "🎩",
+    preview: "🧙",
   },
 ];
 
@@ -39,7 +39,9 @@ export function createWardrobe(
   const wardrobe =
     document.createElement("div");
 
-  wardrobe.id = "hat-wardrobe";
+  wardrobe.id =
+    "hat-wardrobe";
+
   wardrobe.hidden = true;
 
   document.body.appendChild(backdrop);
@@ -49,6 +51,14 @@ export function createWardrobe(
     "click",
     () => toggle(false),
   );
+
+  function ownsHat(hatId) {
+    if (hatId === "none") {
+      return true;
+    }
+
+    return character.ownsHat(hatId);
+  }
 
   function render() {
     wardrobe.innerHTML = `
@@ -69,24 +79,47 @@ export function createWardrobe(
 
         <div class="hat-grid">
 
-          ${HATS.map((hat, index) => `
-            <button
-              class="hat-card${
-                selected === hat.id
-                  ? " selected"
-                  : ""
-              }"
-              data-hat="${index}"
-            >
-              <div class="hat-preview">
-                ${hat.preview}
-              </div>
+          ${HATS.map((hat, index) => {
+            const owned = ownsHat(hat.id);
 
-              <div class="hat-name">
-                ${hat.name}
-              </div>
-            </button>
-          `).join("")}
+            return `
+              <button
+                class="hat-card${
+                  selected === hat.id
+                    ? " selected"
+                    : ""
+                }${
+                  !owned
+                    ? " locked"
+                    : ""
+                }"
+                data-hat="${index}"
+                ${!owned ? "disabled" : ""}
+              >
+                <div class="hat-preview">
+                  ${
+                    owned
+                      ? hat.preview
+                      : "🔒"
+                  }
+                </div>
+
+                <div class="hat-name">
+                  ${hat.name}
+                </div>
+
+                ${
+                  !owned
+                    ? `
+                      <div class="hat-locked">
+                        Locked
+                      </div>
+                    `
+                    : ""
+                }
+              </button>
+            `;
+          }).join("")}
 
         </div>
 
@@ -111,24 +144,45 @@ export function createWardrobe(
           "click",
           async () => {
             const index =
-              Number(button.dataset.hat);
+              Number(
+                button.dataset.hat,
+              );
 
-            await selectHat(HATS[index]);
+            await selectHat(
+              HATS[index],
+            );
           },
         );
       });
   }
 
-async function selectHat(hat) {
-  if (hat.file) {
-    await character.setHat(hat.file, hat.id);
-  } else {
-    character.removeHat();
-  }
+  async function selectHat(hat) {
+    if (!ownsHat(hat.id)) {
+      console.warn(
+        `Cannot equip ${hat.id}: hat is not owned.`,
+      );
 
-  selected = hat.id;
-  render();
-}
+      return;
+    }
+
+    if (hat.file) {
+      const result =
+        await character.setHat(
+          hat.file,
+          hat.id,
+        );
+
+      if (!result) {
+        return;
+      }
+    } else {
+      character.removeHat();
+    }
+
+    selected = hat.id;
+
+    render();
+  }
 
   function toggle(
     open = wardrobe.hidden,
@@ -137,6 +191,9 @@ async function selectHat(hat) {
     backdrop.hidden = !open;
 
     if (open) {
+      selected =
+        character.getHatId();
+
       render();
     }
 
