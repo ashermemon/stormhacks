@@ -11,6 +11,7 @@ import { buildLoot, buildTrinket, TIER_COLORS } from "./models.js";
 import { createJournal } from "./journal.js";
 import { spawnPointFromSeed } from "./spawnZones.js";
 import { createWardrobe } from "../hats.js";
+import { PIXEL_SHELL_SVG } from "./pixelShell.js";
 import "./trinkets.css";
 
 const GRAB_RANGE = 1.8; // from the otter's middle to the trinket
@@ -25,7 +26,9 @@ const BEAT_INTERVAL = 0.6;
 const PERFECT_WINDOW = 0.08; // +- seconds around the beat
 const GOOD_WINDOW = 0.18;
 const FISH_HOLD_SECONDS = 0.05;
-const MISS = 0, GOOD = 1, PERFECT = 2;
+const MISS = 0,
+  GOOD = 1,
+  PERFECT = 2;
 const REVEAL_ROLL_TIME = 1.3; // slot-machine spin before the tier lands
 const REVEAL_HOLD_TIME = 3.0;
 const SAND = [new THREE.Color("#c8b48a"), new THREE.Color("#a08c64")];
@@ -66,8 +69,14 @@ function makeGlintTexture() {
   g.fillRect(0, 0, 64, 64);
   g.fillStyle = "white";
   g.beginPath();
-  g.moveTo(32, 0); g.lineTo(35, 29); g.lineTo(64, 32); g.lineTo(35, 35);
-  g.lineTo(32, 64); g.lineTo(29, 35); g.lineTo(0, 32); g.lineTo(29, 29);
+  g.moveTo(32, 0);
+  g.lineTo(35, 29);
+  g.lineTo(64, 32);
+  g.lineTo(35, 35);
+  g.lineTo(32, 64);
+  g.lineTo(29, 35);
+  g.lineTo(0, 32);
+  g.lineTo(29, 29);
   g.fill();
   return new THREE.CanvasTexture(c);
 }
@@ -114,12 +123,23 @@ function pawTransform(character, outPos, outQuat) {
   return outPos;
 }
 
-export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJournalToggle }) {
+export function createTrinkets({
+  scene,
+  net,
+  zones,
+  getCharacter,
+  swimState,
+  onJournalToggle,
+}) {
   const trinkets = new Map(); // id -> see addTrinket()
   const particles = [];
   const glintTexture = makeGlintTexture();
   const particleGeometry = new THREE.IcosahedronGeometry(1, 0);
-  const journal = createJournal(net.trinketCatalog, net.journal, onJournalToggle);
+  const journal = createJournal(
+    net.trinketCatalog,
+    net.journal,
+    onJournalToggle,
+  );
   let crack = null; // null | { turning } | { pending } | { beats, grades, t } | { waiting }
   let reveal = null;
   let shake = 0;
@@ -130,73 +150,57 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
 
   const prompt = div("trinket-prompt");
   const toast = div("trinket-toast");
-  const rhythm = div("trinket-rhythm", `<div class="pips"></div><div class="target"></div><span class="fThing">Press F to crack!</span><div class="ring"></div><div class="grade"></div>`);
+  const rhythm = div(
+    "trinket-rhythm",
+    `<div class="pips"></div><div class="target"></div><span class="fThing">Press F to crack!</span><div class="ring"></div><div class="grade"></div>`,
+  );
   const card = div("trinket-reveal");
   const ring = rhythm.querySelector(".ring");
   const pips = rhythm.querySelector(".pips");
   const gradeText = rhythm.querySelector(".grade");
-  
+
   let wardrobe = null;
 
   function toggleWardrobe() {
-    const character =
-      getCharacter(net.id);
+    const character = getCharacter(net.id);
 
     if (!character) {
-      console.warn(
-        "Cannot open wardrobe: character is not loaded.",
-      );
+      console.warn("Cannot open wardrobe: character is not loaded.");
 
       return;
     }
-  let pendingHatPurchase = null;
+    let pendingHatPurchase = null;
 
-  net.on(
-    "hat_purchase",
-    (message) => {
+    net.on("hat_purchase", (message) => {
       if (!pendingHatPurchase) {
         return;
       }
 
-      const pending =
-        pendingHatPurchase;
+      const pending = pendingHatPurchase;
 
       pendingHatPurchase = null;
 
       if (message.ok) {
         if (message.journal) {
-          journal.update(
-            message.journal,
-          );
+          journal.update(message.journal);
         }
 
-        if (
-          message.shells !== undefined
-        ) {
+        if (message.shells !== undefined) {
           setShells(message.shells);
         }
       } else {
-        flash(
-          toast,
-          message.message ||
-            "Hat purchase failed.",
-          "bad",
-        );
+        flash(toast, message.message || "Hat purchase failed.", "bad");
       }
 
-      pending.resolve(
-        message.ok === true,
-      );
-    },
-  );
+      pending.resolve(message.ok === true);
+    });
 
-  function purchaseHat(hatId) {
-    if (pendingHatPurchase) {
-      return Promise.resolve(false);
-    }
+    function purchaseHat(hatId) {
+      if (pendingHatPurchase) {
+        return Promise.resolve(false);
+      }
 
-    return new Promise(
-      (resolve) => {
+      return new Promise((resolve) => {
         pendingHatPurchase = {
           resolve,
         };
@@ -205,28 +209,26 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
           type: "hat_purchase",
           hat: hatId,
         });
-      },
-    );
-  }
-  if (!wardrobe) {
-    wardrobe = createWardrobe(
-      character,
-      journal,
-      () => {
-        // Existing toggle handling, if needed.
-      },
-      purchaseHat,
-    );
-  }
+      });
+    }
+    if (!wardrobe) {
+      wardrobe = createWardrobe(
+        character,
+        journal,
+        () => {
+          // Existing toggle handling, if needed.
+        },
+        purchaseHat,
+      );
+    }
 
     wardrobe.toggle();
   }
 
-
   let currentShells = net.journal?.shells ?? 0;
   const shellCounter = div(
     "shell-counter",
-    `<span class="shell-icon">🐚</span><span class="shell-value">${currentShells}</span>`
+    `<span class="shell-icon">${PIXEL_SHELL_SVG}</span><span class="shell-value">${currentShells}</span>`,
   );
   shellCounter.title = "Shells (Click or press J for Journal)";
   shellCounter.addEventListener("click", () => journal.toggle());
@@ -251,11 +253,19 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
     const size = bounds.getSize(new THREE.Vector3());
     const spot = spawnPointFromSeed(zones, data.seed);
     group.position.copy(spot.position);
-    group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), spot.normal);
+    group.quaternion.setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      spot.normal,
+    );
     group.rotateY(spot.yaw);
 
     const glint = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: glintTexture, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }),
+      new THREE.SpriteMaterial({
+        map: glintTexture,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        transparent: true,
+      }),
     );
     glint.position.copy(spot.position).addScaledVector(spot.normal, 0.35);
     scene.add(group, glint);
@@ -288,12 +298,14 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
     return t;
   }
 
-  const myTrinket = () => [...trinkets.values()].find((t) => t.holder === net.id) ?? null;
+  const myTrinket = () =>
+    [...trinkets.values()].find((t) => t.holder === net.id) ?? null;
 
   function nearestGrabbable() {
     if (!player || swimState() !== "under" || myTrinket()) return null;
     const me = new THREE.Vector3(player.x, player.y + 0.5, player.z);
-    let best = null, bestDistance = GRAB_RANGE;
+    let best = null,
+      bestDistance = GRAB_RANGE;
     for (const t of trinkets.values()) {
       if (t.holder) continue;
       const d = t.home.distanceTo(me);
@@ -303,15 +315,33 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   }
 
   // ---- particles: small flat-coloured blobs with velocity, gravity and a lifetime ----
-  function burst(position, colors, count, { speed = 2, gravity = 6, life = 0.7, size = 0.05, up = 1 } = {}) {
+  function burst(
+    position,
+    colors,
+    count,
+    { speed = 2, gravity = 6, life = 0.7, size = 0.05, up = 1 } = {},
+  ) {
     for (let i = 0; i < count; i++) {
       const p = new THREE.Mesh(
         particleGeometry,
-        new THREE.MeshBasicMaterial({ color: colors[i % colors.length], transparent: true }),
+        new THREE.MeshBasicMaterial({
+          color: colors[i % colors.length],
+          transparent: true,
+        }),
       );
       p.position.copy(position);
-      const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() * up, Math.random() - 0.5).normalize();
-      p.userData = { v: dir.multiplyScalar(speed * (0.5 + Math.random())), gravity, life, maxLife: life, size: size * (0.6 + Math.random() * 0.8) };
+      const dir = new THREE.Vector3(
+        Math.random() - 0.5,
+        Math.random() * up,
+        Math.random() - 0.5,
+      ).normalize();
+      p.userData = {
+        v: dir.multiplyScalar(speed * (0.5 + Math.random())),
+        gravity,
+        life,
+        maxLife: life,
+        size: size * (0.6 + Math.random() * 0.8),
+      };
       scene.add(p);
       particles.push(p);
     }
@@ -331,8 +361,8 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
       d.v.y -= d.gravity * dt;
       d.v.multiplyScalar(1 - 2 * dt); // water drag
       p.position.addScaledVector(d.v, dt);
-      p.scale.setScalar(d.size * Math.min(1, d.life / d.maxLife * 2));
-      p.material.opacity = Math.min(1, d.life / d.maxLife * 3);
+      p.scale.setScalar(d.size * Math.min(1, (d.life / d.maxLife) * 2));
+      p.material.opacity = Math.min(1, (d.life / d.maxLife) * 3);
     }
   }
 
@@ -345,7 +375,13 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
     t.holder = by;
     t.grabT = 0;
     // A puff of sand where it lay and a couple of bubbles, for whoever grabbed it.
-    burst(t.home, SAND, 18, { speed: 2.5, gravity: 3, life: 0.9, size: 0.06, up: 0.6 });
+    burst(t.home, SAND, 18, {
+      speed: 2.5,
+      gravity: 3,
+      life: 0.9,
+      size: 0.06,
+      up: 0.6,
+    });
     burst(t.home, BUBBLE, 8, { speed: 1, gravity: -4, life: 1.2, size: 0.05 });
     if (by === net.id) {
       shake = Math.max(shake, 0.12);
@@ -372,7 +408,12 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
 
   net.on("trinket_gone", ({ id, spawn }) => {
     const t = removeTrinket(id);
-    if (t) burst(t.group.position, t.colors, 20, { speed: 3, life: 0.8, size: 0.06 });
+    if (t)
+      burst(t.group.position, t.colors, 20, {
+        speed: 3,
+        life: 0.8,
+        size: 0.06,
+      });
     addTrinket(spawn, true);
   });
 
@@ -392,8 +433,16 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   net.on("trinket_cracked", ({ result, journal: nextJournal }) => {
     endCrack();
     const t = removeTrinket(result.id);
-    const at = t ? t.group.position.clone() : new THREE.Vector3(player.x, player.y + 1 + CRACK_LIFT, player.z);
-    burst(at, t?.colors ?? SAND, 40, { speed: 4.5, gravity: 8, life: 1, size: 0.07, up: 1.5 });
+    const at = t
+      ? t.group.position.clone()
+      : new THREE.Vector3(player.x, player.y + 1 + CRACK_LIFT, player.z);
+    burst(at, t?.colors ?? SAND, 40, {
+      speed: 4.5,
+      gravity: 8,
+      life: 1,
+      size: 0.07,
+      up: 1.5,
+    });
     shake = Math.max(shake, 0.3);
 
     const highlights = [];
@@ -433,11 +482,19 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
     const pip = pips.children[crack.grades.length];
     crack.grades.push(g);
     if (pip) pip.className = ["miss", "good", "perfect"][g];
-    flash(gradeText, ["MISS", "GOOD", "PERFECT!"][g], ["miss", "good", "perfect"][g]);
+    flash(
+      gradeText,
+      ["MISS", "GOOD", "PERFECT!"][g],
+      ["miss", "good", "perfect"][g],
+    );
     const t = myTrinket();
     if (t && g !== MISS) {
       t.wobble = 1;
-      burst(t.group.position, t.colors, g === PERFECT ? 14 : 6, { speed: 3, life: 0.5, size: 0.04 });
+      burst(t.group.position, t.colors, g === PERFECT ? 14 : 6, {
+        speed: 3,
+        life: 0.5,
+        size: 0.04,
+      });
       shake = Math.max(shake, g === PERFECT ? 0.18 : 0.08);
     }
     if (crack.grades.length === crack.beats) {
@@ -496,9 +553,13 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
       // Loot floats up out of the paws and spins.
       const k = Math.min(1, (r.t - REVEAL_ROLL_TIME) * 3);
       const pop = 1 + Math.sin(k * Math.PI) * 0.6;
-      r.loot.position.copy(r.at).setY(r.at.y + k * 0.5 + Math.sin(time * 3) * 0.05);
+      r.loot.position
+        .copy(r.at)
+        .setY(r.at.y + k * 0.5 + Math.sin(time * 3) * 0.05);
       r.loot.rotation.y += dt * 3;
-      r.loot.scale.setScalar(k * pop * (result.itemTier === "legendary" ? 2.2 : 1.6));
+      r.loot.scale.setScalar(
+        k * pop * (result.itemTier === "legendary" ? 2.2 : 1.6),
+      );
       if (r.t > REVEAL_ROLL_TIME + REVEAL_HOLD_TIME) finishReveal();
     }
   }
@@ -511,14 +572,23 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
     tierEl.textContent = `${result.tier} ${result.species}`;
     tierEl.style.color = TIER_COLORS[result.tier];
     card.querySelector(".item").innerHTML = `
-      ${result.bumped ? `<div class="bump">✨ LUCKY! upgraded to ${result.itemTier}</div>` : ""}
+      ${result.bumped ? `<div class="bump">LUCKY! upgraded to ${result.itemTier}</div>` : ""}
       <div class="name" style="color:${TIER_COLORS[result.itemTier]}">${result.name}</div>
       <div class="shells">${result.shells ? `+${result.shells} shells` : "just sand… better luck next time"}${result.perfect ? " · perfect crack!" : ""}</div>
       ${result.newItem ? `<div class="new">NEW! in your journal</div>` : ""}`;
     card.className = `show landed ${result.itemTier}`;
-    const color = [new THREE.Color(TIER_COLORS[result.itemTier]), new THREE.Color("#ffffff")];
-    const big = result.itemTier === "legendary" ? 3 : result.itemTier === "rare" ? 2 : 1;
-    burst(r.at, color, 25 * big, { speed: 3 + big, gravity: 2, life: 1.2, size: 0.05 });
+    const color = [
+      new THREE.Color(TIER_COLORS[result.itemTier]),
+      new THREE.Color("#ffffff"),
+    ];
+    const big =
+      result.itemTier === "legendary" ? 3 : result.itemTier === "rare" ? 2 : 1;
+    burst(r.at, color, 25 * big, {
+      speed: 3 + big,
+      gravity: 2,
+      life: 1.2,
+      size: 0.05,
+    });
     shake = Math.max(shake, 0.1 * big);
   }
 
@@ -572,8 +642,10 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
   function updatePrompt(near, held) {
     let text = "";
     if (crack) text = "";
-    else if (held && swimState() === "surface") text = "<b>F / Act</b> crack it open!";
-    else if (held) text = "Surface to the waterline to crack it open! <b>Space / Rise</b> ⬆";
+    else if (held && swimState() === "surface")
+      text = "<b>F / Act</b> crack it open!";
+    else if (held)
+      text = "Surface to the waterline to crack it open! <b>Space / Rise</b> ⬆";
     else if (near) text = `<b>F / Act</b> grab the ${near.species}`;
     if (prompt.innerHTML !== text) prompt.innerHTML = text;
     prompt.className = text ? "show" : "";
@@ -646,14 +718,23 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
           // skeleton's trinket socket; on land it sits at his paws as before.
           character?.setHolding(true);
           nowHolding.add(t.holder);
-          const hugged = character?.inHoldPose() && character.holdSocket(paw, holdQuat);
+          const hugged =
+            character?.inHoldPose() && character.holdSocket(paw, holdQuat);
           if (!hugged && !pawTransform(character, paw, holdQuat)) {
             t.group.visible = false;
             continue;
           }
           t.group.visible = true;
-          t.fit += ((hugged ? t.hugScale : 1) - t.fit) * Math.min(1, dt * HUG_FIT_SPEED);
-          if (hugged) paw.sub(offset.copy(t.center).multiplyScalar(t.fit).applyQuaternion(holdQuat));
+          t.fit +=
+            ((hugged ? t.hugScale : 1) - t.fit) *
+            Math.min(1, dt * HUG_FIT_SPEED);
+          if (hugged)
+            paw.sub(
+              offset
+                .copy(t.center)
+                .multiplyScalar(t.fit)
+                .applyQuaternion(holdQuat),
+            );
           t.grabT = Math.min(1, t.grabT + dt / GRAB_FLY_TIME);
           const k = 1 - (1 - t.grabT) ** 3; // ease out
           t.group.position.lerpVectors(t.home, paw, k);
@@ -661,7 +742,9 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
           if (k < 1) t.group.position.y += Math.sin(k * Math.PI) * 0.6;
           // While cracking, hold it up over the head so the camera (behind the otter) sees it.
           // Each tap squashes it and knocks it down a little, like a bash on a rock.
-          t.lift += ((t.holder === net.id && crack ? 1 : 0) - t.lift) * Math.min(1, dt * 10);
+          t.lift +=
+            ((t.holder === net.id && crack ? 1 : 0) - t.lift) *
+            Math.min(1, dt * 10);
           t.group.position.y += t.lift * (CRACK_LIFT - t.wobble * 0.4);
           t.group.quaternion.slerpQuaternions(t.homeQuaternion, holdQuat, k);
           const grow = (1 + Math.sin(k * Math.PI) * 0.4 + t.lift * 0.6) * t.fit;
@@ -669,18 +752,28 @@ export function createTrinkets({ scene, net, zones, getCharacter, swimState, onJ
         } else {
           // On the seabed: twinkle now and then; the one you can grab pulses.
           const isNear = t === near;
-          const twinkle = Math.max(0, Math.sin(time * 1.7 + t.twinklePhase)) ** 12;
+          const twinkle =
+            Math.max(0, Math.sin(time * 1.7 + t.twinklePhase)) ** 12;
           t.glint.visible = true;
           t.glint.material.opacity = isNear ? 0.9 : twinkle;
-          t.glint.scale.setScalar(isNear ? 0.5 + Math.sin(time * 8) * 0.08 : 0.25 + twinkle * 0.3);
+          t.glint.scale.setScalar(
+            isNear ? 0.5 + Math.sin(time * 8) * 0.08 : 0.25 + twinkle * 0.3,
+          );
           const pulse = isNear ? 1.12 + Math.sin(time * 8) * 0.06 : 1;
-          const pop = t.popT < 1 ? Math.sin(t.popT * Math.PI * 0.5) * (1 + Math.sin(t.popT * Math.PI) * 0.3) : 1;
-          t.group.scale.set(squash, 1 / squash, squash).multiplyScalar(pulse * pop);
+          const pop =
+            t.popT < 1
+              ? Math.sin(t.popT * Math.PI * 0.5) *
+                (1 + Math.sin(t.popT * Math.PI) * 0.3)
+              : 1;
+          t.group.scale
+            .set(squash, 1 / squash, squash)
+            .multiplyScalar(pulse * pop);
         }
       }
 
       // Let go (cracked, dropped, or someone else took it): back to the normal clips.
-      for (const id of holders) if (!nowHolding.has(id)) getCharacter(id)?.setHolding(false);
+      for (const id of holders)
+        if (!nowHolding.has(id)) getCharacter(id)?.setHolding(false);
       holders = nowHolding;
 
       updateCrack(dt);

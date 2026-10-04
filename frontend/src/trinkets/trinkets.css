@@ -169,8 +169,12 @@
 /* Shell Counter (top right) */
 #shell-counter {
   position: fixed;
-  top: 12px;
-  right: 12px;
+  /* clear of the screen edge (and of phone notches / rounded corners) */
+  top: max(20px, env(safe-area-inset-top));
+  right: max(24px, env(safe-area-inset-right));
+  display: flex;
+  align-items: center;
+  gap: 12px; /* between the shell and the number */
   font-size: 40px;
    color: #fff;
   text-shadow: 1px 2px 0 rgba(0, 0, 0, 0.5);
@@ -179,6 +183,21 @@
   z-index: 12200;
 }
 
+
+/* Pixel-art shell icon (pixelShell.js), sized to the counter's digits. */
+#shell-counter .shell-icon {
+  display: flex;
+}
+#shell-counter .pixel-shell {
+  width: 1.1em;
+  height: auto;
+  filter: drop-shadow(1px 2px 0 rgba(0, 0, 0, 0.5)); /* same drop as the digits' text-shadow */
+}
+
+#shell-counter .shell-value {
+  font-size: 50px;
+  line-height: 1;
+}
 
 @keyframes shell-bounce {
   0% { transform: scale(1); }
