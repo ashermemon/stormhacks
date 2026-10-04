@@ -1,5 +1,8 @@
 import * as THREE from "three";
 import { WATER_SURFACE_Y } from "./world.js";
+import { FISH_MODELS, trinketModel } from "./trinkets/models.js";
+
+const FISH_SCALE = 5; // the Trinkets.glb fish are real-world sized
 
 const COLORS = [0xf2b84b, 0xf08a6b, 0x8cc9d8, 0xd98fca];
 const MIN_DEPTH = 0.7; // fish turn back before water gets shallower than this
@@ -7,7 +10,19 @@ const FLEE_DISTANCE = 4;
 
 // Fish start at random points on the underwater spawn zones and wander wherever the
 // water is deep enough, bobbing between the bed and the surface.
-export function createFish(scene, count, { getGroundHeight, zones }) {
+// Where a fish's mouth is: the front tip of its model (it swims along +x), a little
+// below the middle.
+function mouthOf(root, scale) {
+  const at = root.position.clone();
+  root.position.set(0, 0, 0); // measure in the fish's own space
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(root);
+  root.position.copy(at);
+  if (box.isEmpty()) return { mouth: 1.6 * scale, mouthY: 0 };
+  return { mouth: box.max.x * 0.95, mouthY: (box.min.y + box.max.y) / 2 - (box.max.y - box.min.y) * 0.1 };
+}
+
+export function createFish(scene, count, { getGroundHeight, zones, bubbles = null }) {
   const group = new THREE.Group();
   group.name = "fish";
   scene.add(group);
@@ -27,16 +42,26 @@ export function createFish(scene, count, { getGroundHeight, zones }) {
       color: COLORS[index % COLORS.length],
       roughness: 0.7,
     });
-    // Built facing +x.
-    const body = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 5), material);
-    body.scale.set(1.5 * scale, 0.65 * scale, 0.65 * scale);
-    const tail = new THREE.Mesh(
-      new THREE.ConeGeometry(0.65 * scale, 0.9 * scale, 4),
-      material,
+    // Built facing +x. The Trinkets.glb fish face +z, so turn them a quarter.
+    const model = trinketModel(
+      FISH_MODELS[index % FISH_MODELS.length],
+      COLORS[index % COLORS.length],
+      FISH_SCALE * (scale / 0.28),
     );
-    tail.rotation.z = -Math.PI / 2;
-    tail.position.x = -1.1 * scale;
-    root.add(body, tail);
+    if (model) {
+      model.rotation.y = Math.PI / 2;
+      root.add(model);
+    } else {
+      const body = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 5), material);
+      body.scale.set(1.5 * scale, 0.65 * scale, 0.65 * scale);
+      const tail = new THREE.Mesh(
+        new THREE.ConeGeometry(0.65 * scale, 0.9 * scale, 4),
+        material,
+      );
+      tail.rotation.z = -Math.PI / 2;
+      tail.position.x = -1.1 * scale;
+      root.add(body, tail);
+    }
     root.position.set(spot.x, 0, spot.z);
     group.add(root);
     fish.push({
@@ -45,10 +70,13 @@ export function createFish(scene, count, { getGroundHeight, zones }) {
       depthMix: 0.3 + Math.random() * 0.4, // 0 = bed, 1 = surface
       phase: Math.random() * Math.PI * 2,
       speed: 0.25 + Math.random() * 0.5,
+      ...mouthOf(root, scale),
+      breath: Math.random() * 3, // seconds until it next breathes out bubbles
     });
   }
 
   let elapsed = 0;
+  const mouth = new THREE.Vector3();
   return {
     update(dt, player) {
       elapsed += dt;
@@ -75,6 +103,18 @@ export function createFish(scene, count, { getGroundHeight, zones }) {
         const bob = Math.sin(elapsed * 1.8 + swimmer.phase) * 0.1;
         position.y = THREE.MathUtils.lerp(bed, top, swimmer.depthMix) + bob;
         swimmer.root.rotation.y = swimmer.heading;
+
+        // Every couple of seconds, a few little bubbles from its mouth.
+        swimmer.breath -= dt;
+        if (bubbles && swimmer.breath <= 0) {
+          swimmer.breath = 1.5 + Math.random() * 2.5;
+          mouth.set(
+            position.x + Math.cos(swimmer.heading) * swimmer.mouth,
+            position.y + swimmer.mouthY,
+            position.z - Math.sin(swimmer.heading) * swimmer.mouth,
+          );
+          bubbles.emit(mouth, 1 + Math.floor(Math.random() * 3));
+        }
       }
     },
   };

@@ -439,6 +439,20 @@ export class Character {
     return hat;
   }
 
+  /** While underwater, breathe out a few bubbles from the head every so often. */
+  breathe(dt, bubbles, underwater) {
+    this.breath = (this.breath ?? Math.random()) - dt;
+    if (!underwater || this.breath > 0) return;
+    this.breath = 0.5 + Math.random() * 0.8;
+    this.headBone ??= this.model?.getObjectByName("head");
+    this.breathAt ??= new THREE.Vector3();
+    // The mouth, just under the nose, in the head bone's space (the nose tip is at
+    // y 1.0, z 0.35 in the model; the head bone at y 0.8), so it follows the head.
+    if (this.headBone) this.headBone.localToWorld(this.breathAt.set(0, 0.14, 0.38));
+    else this.breathAt.copy(this.root.position).y += 1.5;
+    bubbles.emit(this.breathAt, 1 + Math.floor(Math.random() * 3));
+  }
+
   getHatId() {
     return this.hatId;
   }

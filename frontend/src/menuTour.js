@@ -57,6 +57,7 @@ export function startMenuTour(view, fadeElement) {
     updateWater(time);
     updateWind(time);
     fish.update(dt, nobody);
+    view.bubbles.update(dt, time);
     scenery.update(camera);
     environment.update(camera, time);
     for (const campfire of view.campfires) campfire.update(time);

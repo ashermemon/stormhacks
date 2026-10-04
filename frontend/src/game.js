@@ -3,7 +3,7 @@ import { connect } from "./net.js";
 import { keys } from "./input.js";
 import { createAquaticArea } from "./water.js";
 import { createEnvironment } from "./environment.js";
-import { loadWorld } from "./world.js";
+import { loadWorld, WATER_SURFACE_Y } from "./world.js";
 import { applyToonWater, updateWater } from "./watershader.js";
 import { Character, OTTER_COLORS } from "./character.js";
 import { createChat } from "./chat.js";
@@ -14,6 +14,8 @@ import { createSeating } from "./seating.js";
 import { createCampfire } from "./campfire.js";
 import { createWaterfall, WATERFALL } from "./waterfall.js";
 import { createFish } from "./fish.js";
+import { createBubbles } from "./bubbles.js";
+import { loadTrinketModels } from "./trinkets/models.js";
 import { createTrinkets } from "./trinkets/trinkets.js";
 import { collectSpawnZones } from "./trinkets/spawnZones.js";
 import { createMobileControls } from "./mobile.js";
@@ -106,17 +108,19 @@ export async function loadScene() {
   const aquatic = createAquaticArea(getGroundHeight);
   // Trinkets (and fish) use the World.glb spawn-zone meshes; collectSpawnZones hides them.
   const zones = collectSpawnZones(world.root);
-  const fish = createFish(scene, 12, { getGroundHeight, zones });
+  await loadTrinketModels(); // Trinkets.glb, for the fish and the trinkets
+  const bubbles = createBubbles(scene); // breath bubbles from fish and underwater otters
+  const fish = createFish(scene, 12, { getGroundHeight, zones, bubbles });
 
   // Cel-shade everything built so far (the water keeps its own shader); otters are styled in Character.
   toonifyScene(scene);
 
-  return { scene, environment, world, scenery, campfires, waterfall, camera, renderer, aquatic, zones, fish };
+  return { scene, environment, world, scenery, campfires, waterfall, camera, renderer, aquatic, zones, fish, bubbles };
 }
 
 /** Connects and starts playing in a scene from loadScene(). */
 export async function startGame(view) {
-  const { scene, environment, world, scenery, campfires, waterfall, camera, renderer, aquatic, zones, fish } = view;
+  const { scene, environment, world, scenery, campfires, waterfall, camera, renderer, aquatic, zones, fish, bubbles } = view;
   const { getGroundHeight } = world;
   const canvas = renderer.domElement;
   const lockPointer = () => canvas.requestPointerLock()?.catch?.(() => {});
@@ -183,6 +187,9 @@ export async function startGame(view) {
 
   // Local player.
   const me = new Character(scene, colorFor(net.id), net.name);
+  if (net.hats) {
+    me.ownedHats = { ...me.ownedHats, ...net.hats };
+  }
   const player = {
     x: SPAWN.x,
     y: getGroundHeight(SPAWN.x, SPAWN.z),
@@ -342,6 +349,7 @@ export async function startGame(view) {
     me.root.position.set(player.x, player.y, player.z);
     me.root.rotation.y = player.ry;
     me.update(dt, aquatic.swimModeAt);
+    me.breathe(dt, bubbles, aquatic.swimState() === "under" && player.y < WATER_SURFACE_Y - 0.4);
 
     // Smooth remote players before trinkets so held items track current paw poses.
     const t = 1 - Math.exp(-REMOTE_SMOOTHING * dt);
@@ -352,7 +360,9 @@ export async function startGame(view) {
       position.z += (target.z - position.z) * t;
       rotation.y = lerpAngle(rotation.y, target.ry, t);
       character.update(dt, aquatic.swimModeAt);
+      character.breathe(dt, bubbles, position.y < WATER_SURFACE_Y - 0.6);
     }
+    bubbles.update(dt, clock.elapsedTime);
 
     // Third-person camera behind the player, looking at their head.
     const pose = seating.pose();
